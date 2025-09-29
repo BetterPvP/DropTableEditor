@@ -1,0 +1,62 @@
+{
+  "basic_mobs": {
+    "categories": [
+      {
+        "categoryWeight": 8,
+        "items": [
+          {
+            "itemId": "minecraft:netherite_scrap",
+            "itemWeight": 1
+          },
+          {
+            "itemId": "minecraft:gold_ingot",
+            "itemWeight": 4
+          }
+        ]
+      }
+    ]
+  },
+  "elite_mobs": {
+    "categories": [
+      {
+        "categoryWeight": 12,
+        "items": [
+          {
+            "itemId": "minecraft:netherite_scrap",
+            "itemWeight": 3
+          },
+          {
+            "itemId": "minecraft:diamond",
+            "itemWeight": 5
+          }
+        ]
+      },
+      {
+        "categoryWeight": 8,
+        "items": [
+          {
+            "itemId": "minecraft:emerald",
+            "itemWeight": 10
+          }
+        ]
+      }
+    ]
+  },
+  "boss": {
+    "categories": [
+      {
+        "categoryWeight": 25,
+        "items": [
+          {
+            "itemId": "minecraft:netherite_scrap",
+            "itemWeight": 8
+          },
+          {
+            "itemId": "minecraft:diamond",
+            "itemWeight": 12
+          }
+        ]
+      }
+    ]
+  }
+}
