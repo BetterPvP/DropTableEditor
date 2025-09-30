@@ -4,6 +4,7 @@ import Auth from './components/Auth'
 import RegisteredItems from './components/RegisteredItems'
 import DropTableEditor from './components/DropTableEditor'
 import InviteCodeManager from './components/InviteCodeManager'
+import DropTableBrowser from './components/DropTableBrowser'
 import './App.css'
 
 function App() {
@@ -299,6 +300,13 @@ function App() {
 
       <nav className="tabs">
         <button
+          className={activeTab === 'browse-tables' ? 'tab active' : 'tab'}
+          onClick={() => setActiveTab('browse-tables')}
+        >
+          📋 Browse Tables
+        </button>
+
+        <button
           className={activeTab === 'registered-items' ? 'tab active' : 'tab'}
           onClick={() => setActiveTab('registered-items')}
         >
@@ -362,7 +370,13 @@ function App() {
       </nav>
 
       <main className="content">
-        {activeTab === 'registered-items' ? (
+        {activeTab === 'browse-tables' ? (
+          <DropTableBrowser
+            onLoadTable={(dungeonName, variationName) => {
+              setActiveTab(`${dungeonName}-${variationName}`)
+            }}
+          />
+        ) : activeTab === 'registered-items' ? (
           <RegisteredItems
             registeredItems={registeredItems}
           />
