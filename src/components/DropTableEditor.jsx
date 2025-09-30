@@ -11,7 +11,7 @@ import { Save, Copy, Dices, X } from 'lucide-react'
 function DropTableEditor({ data, registeredItems, onChange, onExport, onDuplicate, title }) {
   const [selectedItem, setSelectedItem] = useState('')
   const [showSimulator, setShowSimulator] = useState(false)
-  const [localData, setLocalData] = useState(data)
+  const [localData, setLocalData] = useState(() => JSON.parse(JSON.stringify(data))) // Deep clone
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
   // Initialize items array if using old category structure
@@ -85,14 +85,14 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, onDuplicat
       return
     }
 
-    newData.items = [...newData.items, {
+    newData.items = [{
       itemId: selectedItem,
       itemWeight: 10,
       minYield: 1,
       maxYield: 1,
       shouldDrop: true,
       replacementStrategy: 'UNSET'
-    }]
+    }, ...newData.items]
     delete newData.categories
     setLocalData(newData)
     setHasUnsavedChanges(true)
@@ -150,7 +150,23 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, onDuplicat
                 Duplicate
               </Button>
             )}
-            <Button onClick={onExport} variant="accent">
+            <Button 
+              onClick={() => {
+                // Create a clean export by removing UNSET replacement strategies
+                const exportData = { ...localData }
+                if (exportData.items) {
+                  exportData.items = exportData.items.map(item => {
+                    const cleanItem = { ...item }
+                    if (cleanItem.replacementStrategy === 'UNSET') {
+                      delete cleanItem.replacementStrategy
+                    }
+                    return cleanItem
+                  })
+                }
+                onExport(exportData)
+              }} 
+              variant="accent"
+            >
               <Save className="w-4 h-4" />
               Export
             </Button>
