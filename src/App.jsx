@@ -5,7 +5,11 @@ import RegisteredItems from './components/RegisteredItems'
 import DropTableEditor from './components/DropTableEditor'
 import InviteCodeManager from './components/InviteCodeManager'
 import DropTableBrowser from './components/DropTableBrowser'
-import './App.css'
+import { Button } from './components/ui/button'
+import { AlertDialog } from './components/ui/alert-dialog'
+import { PromptDialog } from './components/ui/prompt-dialog'
+import { ConfirmDialog } from './components/ui/confirm-dialog'
+import { Upload, LogOut, X, Download, Plus } from 'lucide-react'
 
 function App() {
   const [session, setSession] = useState(null)
@@ -14,6 +18,11 @@ function App() {
   const [dropTables, setDropTables] = useState({})
   const [activeTab, setActiveTab] = useState('registered-items')
   const [dungeonTabs, setDungeonTabs] = useState({})
+
+  // Dialog states
+  const [alertDialog, setAlertDialog] = useState({ open: false, title: '', message: '', variant: 'info' })
+  const [promptDialog, setPromptDialog] = useState({ open: false, title: '', message: '', placeholder: '', onConfirm: null })
+  const [confirmDialog, setConfirmDialog] = useState({ open: false, title: '', message: '', onConfirm: null, variant: 'default' })
 
   // Check authentication status
   useEffect(() => {
@@ -167,7 +176,12 @@ function App() {
         // Switch to first variation tab
         setActiveTab(`${fileName}-${Object.keys(data)[0]}`)
       } catch (err) {
-        alert('Error parsing JSON file: ' + err.message)
+        setAlertDialog({
+          open: true,
+          title: 'Error',
+          message: 'Error parsing JSON file: ' + err.message,
+          variant: 'error'
+        })
       }
     }
     reader.readAsText(file)
@@ -222,47 +236,88 @@ function App() {
     })
   }
 
-  const addVariation = async (dungeonName) => {
-    const variationName = prompt('Enter variation name (e.g., boss, chest, elite_mob):')
-    if (!variationName || !variationName.trim()) return
+  const addVariation = (dungeonName) => {
+    setPromptDialog({
+      open: true,
+      title: 'Add Variation',
+      message: 'Enter variation name (e.g., boss, chest, elite_mob):',
+      placeholder: 'Variation name',
+      onConfirm: async (variationName) => {
+        if (!variationName || !variationName.trim()) return
 
-    const cleanName = variationName.trim()
+        const cleanName = variationName.trim()
 
-    await supabase.from('drop_tables').insert({
-      dungeon_name: dungeonName,
-      variation_name: cleanName,
-      data: { categories: [] },
-      updated_at: new Date().toISOString()
+        await supabase.from('drop_tables').insert({
+          dungeon_name: dungeonName,
+          variation_name: cleanName,
+          data: { items: [] },
+          updated_at: new Date().toISOString()
+        })
+
+        setActiveTab(`${dungeonName}-${cleanName}`)
+      }
     })
-
-    setActiveTab(`${dungeonName}-${cleanName}`)
   }
 
-  const removeVariation = async (dungeonName, variationName) => {
-    if (!confirm(`Remove variation "${variationName}"?`)) return
+  const removeVariation = (dungeonName, variationName) => {
+    setConfirmDialog({
+      open: true,
+      title: 'Remove Variation',
+      message: `Remove variation "${variationName}"?`,
+      variant: 'destructive',
+      onConfirm: async () => {
+        await supabase.from('drop_tables')
+          .delete()
+          .eq('dungeon_name', dungeonName)
+          .eq('variation_name', variationName)
 
-    await supabase.from('drop_tables')
-      .delete()
-      .eq('dungeon_name', dungeonName)
-      .eq('variation_name', variationName)
-
-    // Switch to another tab
-    const remainingTabs = dungeonTabs[dungeonName]?.filter(v => v !== variationName) || []
-    if (remainingTabs.length > 0) {
-      setActiveTab(`${dungeonName}-${remainingTabs[0]}`)
-    } else {
-      setActiveTab('registered-items')
-    }
+        // Switch to another tab
+        const remainingTabs = dungeonTabs[dungeonName]?.filter(v => v !== variationName) || []
+        if (remainingTabs.length > 0) {
+          setActiveTab(`${dungeonName}-${remainingTabs[0]}`)
+        } else {
+          setActiveTab('registered-items')
+        }
+      }
+    })
   }
 
-  const removeDungeon = async (dungeonName) => {
-    if (!confirm(`Remove entire dungeon "${dungeonName}" and all its variations?`)) return
+  const removeDungeon = (dungeonName) => {
+    setConfirmDialog({
+      open: true,
+      title: 'Remove Dungeon',
+      message: `Remove entire dungeon "${dungeonName}" and all its variations?`,
+      variant: 'destructive',
+      onConfirm: async () => {
+        await supabase.from('drop_tables')
+          .delete()
+          .eq('dungeon_name', dungeonName)
 
-    await supabase.from('drop_tables')
-      .delete()
-      .eq('dungeon_name', dungeonName)
+        setActiveTab('registered-items')
+      }
+    })
+  }
 
-    setActiveTab('registered-items')
+  const duplicateVariation = (dungeonName, variationName) => {
+    setPromptDialog({
+      open: true,
+      title: 'Duplicate Variation',
+      message: 'Enter name for duplicated variation:',
+      placeholder: 'Variation name',
+      onConfirm: async (newName) => {
+        if (!newName || !newName.trim()) return
+
+        const data = dropTables[dungeonName][variationName]
+        await supabase.from('drop_tables').insert({
+          dungeon_name: dungeonName,
+          variation_name: newName.trim(),
+          data: data,
+          updated_at: new Date().toISOString()
+        })
+
+        setActiveTab(`${dungeonName}-${newName.trim()}`)
+      }
+    })
   }
 
   const handleSignOut = async () => {
@@ -270,7 +325,11 @@ function App() {
   }
 
   if (loading) {
-    return <div className="loading">Loading...</div>
+    return (
+      <div className="min-h-screen bg-[#0f1419] flex items-center justify-center">
+        <div className="text-cyan-400 text-xl">Loading...</div>
+      </div>
+    )
   }
 
   if (!session) {
@@ -278,98 +337,139 @@ function App() {
   }
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <h1>Minecraft Drop Table Editor</h1>
-        <div className="header-actions">
-          <label className="file-upload-btn">
-            Load Drop Table(s)
-            <input
-              type="file"
-              accept=".json"
-              multiple
-              onChange={handleFileUpload}
-              style={{ display: 'none' }}
-            />
-          </label>
-          <button onClick={handleSignOut} className="btn-sign-out">
-            Sign Out
-          </button>
+    <div className="min-h-screen bg-[#0f1419]">
+      {/* Sticky Header */}
+      <header className="sticky top-0 z-50 bg-[#1a1f2e]/95 backdrop-blur-sm border-b border-cyan-500/20 shadow-lg shadow-cyan-500/5">
+        <div className="container mx-auto px-6 py-4 flex items-center justify-between">
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+            Minecraft Drop Table Editor
+          </h1>
+          <div className="flex items-center gap-3">
+            <label>
+              <Button variant="default" className="cursor-pointer">
+                <Upload className="w-4 h-4" />
+                Load Drop Table(s)
+              </Button>
+              <input
+                type="file"
+                accept=".json"
+                multiple
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+            </label>
+            <Button variant="secondary" onClick={handleSignOut}>
+              <LogOut className="w-4 h-4" />
+              Sign Out
+            </Button>
+          </div>
         </div>
       </header>
 
-      <nav className="tabs">
-        <button
-          className={activeTab === 'browse-tables' ? 'tab active' : 'tab'}
-          onClick={() => setActiveTab('browse-tables')}
-        >
-          📋 Browse Tables
-        </button>
-
-        <button
-          className={activeTab === 'registered-items' ? 'tab active' : 'tab'}
-          onClick={() => setActiveTab('registered-items')}
-        >
-          Registered Items
-        </button>
-
-        <button
-          className={activeTab === 'invite-codes' ? 'tab active' : 'tab'}
-          onClick={() => setActiveTab('invite-codes')}
-        >
-          Invite Codes
-        </button>
-
-        {Object.keys(dropTables).map(dungeonName => (
-          <div key={dungeonName} className="dungeon-tab-group">
-            <div className="dungeon-header">
-              <span className="dungeon-name">{dungeonName}</span>
-              <button
-                className="btn-export-all"
-                onClick={() => exportAllVariations(dungeonName)}
-                title="Export all variations"
-              >
-                ⬇ All
-              </button>
-              <button
-                className="btn-remove"
-                onClick={() => removeDungeon(dungeonName)}
-                title="Remove dungeon"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="variation-tabs">
-              {dungeonTabs[dungeonName]?.map(variation => (
-                <button
-                  key={variation}
-                  className={activeTab === `${dungeonName}-${variation}` ? 'tab active' : 'tab'}
-                  onClick={() => setActiveTab(`${dungeonName}-${variation}`)}
-                >
-                  {variation}
-                  <span
-                    className="remove-variation"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      removeVariation(dungeonName, variation)
-                    }}
-                  >
-                    ✕
-                  </span>
-                </button>
-              ))}
-              <button
-                className="tab add-variation"
-                onClick={() => addVariation(dungeonName)}
-              >
-                + Add Variation
-              </button>
-            </div>
-          </div>
-        ))}
+      {/* Navigation Links */}
+      <nav className="bg-[#151922] border-b border-slate-700/50 px-6 py-3">
+        <div className="container mx-auto flex items-center gap-2">
+          <Button
+            variant={activeTab === 'browse-tables' ? 'accent' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('browse-tables')}
+          >
+            Browse Tables
+          </Button>
+          <Button
+            variant={activeTab === 'registered-items' ? 'accent' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('registered-items')}
+          >
+            Registered Items
+          </Button>
+          <Button
+            variant={activeTab === 'invite-codes' ? 'accent' : 'ghost'}
+            size="sm"
+            onClick={() => setActiveTab('invite-codes')}
+          >
+            Invite Codes
+          </Button>
+        </div>
       </nav>
 
-      <main className="content">
+      {/* Dungeon Variation Cards */}
+      {Object.keys(dropTables).length > 0 && (
+        <div className="bg-[#151922] border-b border-slate-700/50 px-6 py-4">
+          <div className="container mx-auto">
+            <div className="flex flex-wrap gap-2">
+              {Object.keys(dropTables).map(dungeonName => (
+                <div key={dungeonName} className="flex flex-wrap gap-2 items-center">
+                  {/* Dungeon name badge */}
+                  <div className="flex items-center gap-2 bg-slate-800/50 border border-cyan-500/30 rounded-lg px-3 py-1.5">
+                    <span className="text-sm font-semibold text-cyan-400">{dungeonName}</span>
+                    <button
+                      onClick={() => exportAllVariations(dungeonName)}
+                      className="text-purple-400 hover:text-purple-300 transition-colors"
+                      title="Export all variations"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => removeDungeon(dungeonName)}
+                      className="text-red-400 hover:text-red-300 transition-colors"
+                      title="Remove dungeon"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Individual variation cards */}
+                  {dungeonTabs[dungeonName]?.map(variation => (
+                    <button
+                      key={variation}
+                      onClick={() => setActiveTab(`${dungeonName}-${variation}`)}
+                      className={`group relative flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-all duration-200 hover:-translate-y-0.5 ${
+                        activeTab === `${dungeonName}-${variation}`
+                          ? 'bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border-cyan-500/50 shadow-lg shadow-cyan-500/20'
+                          : 'bg-slate-800/30 border-slate-700/50 hover:border-slate-600'
+                      }`}
+                    >
+                      <span className={`text-sm font-medium ${
+                        activeTab === `${dungeonName}-${variation}`
+                          ? 'text-cyan-300'
+                          : 'text-slate-300'
+                      }`}>
+                        {variation}
+                      </span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          removeVariation(dungeonName, variation)
+                        }}
+                        className={`transition-colors ${
+                          activeTab === `${dungeonName}-${variation}`
+                            ? 'text-cyan-400 hover:text-red-400'
+                            : 'text-slate-500 hover:text-red-400'
+                        }`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </button>
+                  ))}
+
+                  {/* Add variation button */}
+                  <button
+                    onClick={() => addVariation(dungeonName)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400 hover:bg-purple-500/20 hover:border-purple-500/50 transition-all duration-200 hover:-translate-y-0.5"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span className="text-sm font-medium">Add Variation</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <main className="container mx-auto px-6 py-8">
         {activeTab === 'browse-tables' ? (
           <DropTableBrowser
             onLoadTable={(dungeonName, variationName) => {
@@ -387,7 +487,7 @@ function App() {
             const [dungeonName, variationName] = activeTab.split('-')
             const data = dropTables[dungeonName]?.[variationName]
 
-            if (!data) return <div>No data available</div>
+            if (!data) return <div className="text-slate-400">No data available</div>
 
             return (
               <DropTableEditor
@@ -395,12 +495,38 @@ function App() {
                 registeredItems={registeredItems}
                 onChange={(newData) => updateDropTable(dungeonName, variationName, newData)}
                 onExport={() => exportDropTable(dungeonName, variationName)}
+                onDuplicate={() => duplicateVariation(dungeonName, variationName)}
                 title={`${dungeonName} - ${variationName}`}
               />
             )
           })()
         )}
       </main>
+
+      {/* Dialogs */}
+      <AlertDialog
+        open={alertDialog.open}
+        onOpenChange={(open) => setAlertDialog({ ...alertDialog, open })}
+        title={alertDialog.title}
+        message={alertDialog.message}
+        variant={alertDialog.variant}
+      />
+      <PromptDialog
+        open={promptDialog.open}
+        onOpenChange={(open) => setPromptDialog({ ...promptDialog, open })}
+        title={promptDialog.title}
+        message={promptDialog.message}
+        placeholder={promptDialog.placeholder}
+        onConfirm={promptDialog.onConfirm}
+      />
+      <ConfirmDialog
+        open={confirmDialog.open}
+        onOpenChange={(open) => setConfirmDialog({ ...confirmDialog, open })}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        variant={confirmDialog.variant}
+        onConfirm={confirmDialog.onConfirm}
+      />
     </div>
   )
 }

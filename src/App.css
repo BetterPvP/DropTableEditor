@@ -6,9 +6,9 @@
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #1a1f29 100%);
+  background: linear-gradient(135deg, #0B0E14 0%, #161B26 50%, #1E2636 100%);
   background-attachment: fixed;
-  color: #e6edf3;
+  color: #E8EEF5;
   line-height: 1.6;
 }
 
@@ -29,12 +29,12 @@ body {
 
 /* Header */
 .app-header {
-  background: rgba(22, 27, 34, 0.85);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(11, 14, 20, 0.9);
+  backdrop-filter: blur(25px) saturate(200%);
+  -webkit-backdrop-filter: blur(25px) saturate(200%);
   padding: 1.5rem 2rem;
-  border-bottom: 1px solid rgba(99, 110, 123, 0.2);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid rgba(0, 212, 255, 0.15);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5), 0 0 80px rgba(0, 212, 255, 0.1);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -42,12 +42,13 @@ body {
 
 .app-header h1 {
   font-size: 1.8rem;
-  font-weight: 600;
-  background: linear-gradient(135deg, #3fb950 0%, #52c46c 100%);
+  font-weight: 700;
+  background: linear-gradient(135deg, #00D4FF 0%, #40C4FF 50%, #A277FF 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   letter-spacing: -0.02em;
+  text-shadow: 0 0 40px rgba(0, 212, 255, 0.3);
 }
 
 .header-actions {
@@ -56,61 +57,60 @@ body {
 }
 
 .file-upload-btn {
-  background: linear-gradient(135deg, #3fb950 0%, #2ea043 100%);
-  color: white;
+  background: linear-gradient(135deg, #00D4FF 0%, #0099CC 100%);
+  color: #0B0E14;
   padding: 0.7rem 1.4rem;
   border-radius: 8px;
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px rgba(63, 185, 80, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 212, 255, 0.35), 0 0 30px rgba(0, 212, 255, 0.15);
+  border: 1px solid rgba(0, 212, 255, 0.3);
 }
 
 .file-upload-btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(63, 185, 80, 0.4);
-  background: linear-gradient(135deg, #52c46c 0%, #3fb950 100%);
+  box-shadow: 0 6px 24px rgba(0, 212, 255, 0.5), 0 0 50px rgba(0, 212, 255, 0.25);
+  background: linear-gradient(135deg, #40C4FF 0%, #00D4FF 100%);
 }
 
 .btn-sign-out {
-  background: linear-gradient(135deg, #da3633 0%, #b32e2e 100%);
+  background: linear-gradient(135deg, #FF4757 0%, #CC3A47 100%);
   color: white;
   padding: 0.7rem 1.4rem;
   border-radius: 8px;
-  border: none;
+  border: 1px solid rgba(255, 71, 87, 0.3);
   cursor: pointer;
-  font-weight: 500;
+  font-weight: 600;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px rgba(218, 54, 51, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 16px rgba(255, 71, 87, 0.35), 0 0 30px rgba(255, 71, 87, 0.15);
 }
 
 .btn-sign-out:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(218, 54, 51, 0.4);
+  box-shadow: 0 6px 24px rgba(255, 71, 87, 0.5), 0 0 50px rgba(255, 71, 87, 0.25);
 }
 
 /* Tabs */
 .tabs {
-  background: rgba(22, 27, 34, 0.75);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(11, 14, 20, 0.85);
+  backdrop-filter: blur(25px) saturate(200%);
+  -webkit-backdrop-filter: blur(25px) saturate(200%);
   padding: 1rem 2rem;
-  border-bottom: 1px solid rgba(99, 110, 123, 0.2);
+  border-bottom: 1px solid rgba(0, 212, 255, 0.15);
   display: flex;
   gap: 0.5rem;
   flex-wrap: wrap;
   align-items: flex-start;
-  box-shadow: 0 2px 15px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
 }
 
 .tab {
-  background: rgba(48, 54, 61, 0.6);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(99, 110, 123, 0.3);
-  color: #b1bac4;
+  background: rgba(30, 38, 54, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(64, 196, 255, 0.2);
+  color: #9BA8BD;
   padding: 0.6rem 1.2rem;
   border-radius: 8px;
   cursor: pointer;
@@ -121,18 +121,18 @@ body {
 }
 
 .tab:hover {
-  background: rgba(48, 54, 61, 0.9);
-  color: #e6edf3;
-  border-color: rgba(99, 110, 123, 0.5);
+  background: rgba(30, 38, 54, 0.9);
+  color: #E8EEF5;
+  border-color: rgba(64, 196, 255, 0.4);
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 212, 255, 0.2);
 }
 
 .tab.active {
-  background: linear-gradient(135deg, rgba(63, 185, 80, 0.9) 0%, rgba(46, 160, 67, 0.9) 100%);
-  color: white;
-  border-color: rgba(63, 185, 80, 0.5);
-  box-shadow: 0 4px 16px rgba(63, 185, 80, 0.3);
+  background: linear-gradient(135deg, rgba(0, 212, 255, 0.25) 0%, rgba(162, 119, 255, 0.25) 100%);
+  color: #00D4FF;
+  border-color: rgba(0, 212, 255, 0.6);
+  box-shadow: 0 4px 20px rgba(0, 212, 255, 0.3), inset 0 0 30px rgba(0, 212, 255, 0.1);
 }
 
 /* Dungeon Tab Group */
@@ -157,14 +157,14 @@ body {
 }
 
 .dungeon-name {
-  font-weight: 600;
-  background: linear-gradient(135deg, #3fb950 0%, #52c46c 100%);
+  font-weight: 700;
+  background: linear-gradient(135deg, #00D4FF 0%, #A277FF 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   font-size: 0.85rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
 }
 
 .btn-export-all {
@@ -247,11 +247,11 @@ body {
 
 .registered-items h2 {
   margin-bottom: 1rem;
-  background: linear-gradient(135deg, #3fb950 0%, #52c46c 100%);
+  background: linear-gradient(135deg, #00D4FF 0%, #40C4FF 50%, #A277FF 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 2rem;
 }
 
@@ -282,34 +282,69 @@ body {
 
 .item-input:focus {
   outline: none;
-  border-color: #3fb950;
-  box-shadow: 0 0 0 3px rgba(63, 185, 80, 0.2);
-  background: rgba(22, 27, 34, 0.8);
+  border-color: #00D4FF;
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.3), 0 0 20px rgba(0, 212, 255, 0.2);
+  background: rgba(11, 14, 20, 0.9);
 }
 
 .btn-add {
-  background: linear-gradient(135deg, #3fb950 0%, #2ea043 100%);
-  color: white;
-  border: none;
+  background: linear-gradient(135deg, #00D4FF 0%, #0099CC 100%);
+  color: #0B0E14;
+  border: 1px solid rgba(0, 212, 255, 0.3);
   padding: 0.9rem 2rem;
   border-radius: 8px;
   cursor: pointer;
   font-size: 1rem;
   font-weight: 600;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px rgba(63, 185, 80, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 212, 255, 0.35), 0 0 30px rgba(0, 212, 255, 0.15);
 }
 
 .btn-add:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(63, 185, 80, 0.4);
+  box-shadow: 0 6px 24px rgba(0, 212, 255, 0.5), 0 0 50px rgba(0, 212, 255, 0.25);
 }
 
 .btn-add:disabled {
   opacity: 0.5;
   cursor: not-allowed;
   transform: none;
+}
+
+.btn-simulator {
+  background: linear-gradient(135deg, #A277FF 0%, #8A5CFF 100%);
+  color: white;
+  border: 1px solid rgba(162, 119, 255, 0.3);
+  padding: 0.9rem 2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px rgba(162, 119, 255, 0.35), 0 0 30px rgba(162, 119, 255, 0.15);
+}
+
+.btn-simulator:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(162, 119, 255, 0.5), 0 0 50px rgba(162, 119, 255, 0.25);
+}
+
+.btn-duplicate {
+  background: linear-gradient(135deg, #6B7A99 0%, #556688 100%);
+  color: white;
+  border: 1px solid rgba(107, 122, 153, 0.3);
+  padding: 0.9rem 2rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px rgba(107, 122, 153, 0.35), 0 0 30px rgba(107, 122, 153, 0.15);
+}
+
+.btn-duplicate:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 24px rgba(107, 122, 153, 0.5), 0 0 50px rgba(107, 122, 153, 0.25);
 }
 
 .items-grid {
@@ -334,10 +369,10 @@ body {
 }
 
 .item-card:hover {
-  border-color: rgba(63, 185, 80, 0.6);
+  border-color: rgba(0, 212, 255, 0.6);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  background: rgba(22, 27, 34, 0.8);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), 0 0 30px rgba(0, 212, 255, 0.1);
+  background: rgba(11, 14, 20, 0.9);
 }
 
 .item-id {
@@ -400,11 +435,11 @@ body {
 }
 
 .editor-header h2 {
-  background: linear-gradient(135deg, #3fb950 0%, #52c46c 100%);
+  background: linear-gradient(135deg, #00D4FF 0%, #40C4FF 50%, #A277FF 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  font-weight: 600;
+  font-weight: 700;
   font-size: 2rem;
 }
 
@@ -414,22 +449,21 @@ body {
 }
 
 .btn-export {
-  background: linear-gradient(135deg, #1f6feb 0%, #1158c7 100%);
-  color: white;
-  border: none;
+  background: linear-gradient(135deg, #00D4FF 0%, #0099CC 100%);
+  color: #0B0E14;
+  border: 1px solid rgba(0, 212, 255, 0.3);
   padding: 0.9rem 2rem;
   border-radius: 8px;
   cursor: pointer;
   font-size: 1rem;
   font-weight: 600;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px rgba(31, 111, 235, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 16px rgba(0, 212, 255, 0.35), 0 0 30px rgba(0, 212, 255, 0.15);
 }
 
 .btn-export:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(31, 111, 235, 0.4);
+  box-shadow: 0 6px 24px rgba(0, 212, 255, 0.5), 0 0 50px rgba(0, 212, 255, 0.25);
 }
 
 /* Category Section */
@@ -500,8 +534,8 @@ body {
 
 .item-selector:focus {
   outline: none;
-  border-color: #3fb950;
-  box-shadow: 0 0 0 3px rgba(63, 185, 80, 0.2);
+  border-color: #00D4FF;
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.3), 0 0 20px rgba(0, 212, 255, 0.2);
 }
 
 .item-selector option {
@@ -511,22 +545,21 @@ body {
 }
 
 .btn-add-small {
-  background: linear-gradient(135deg, #3fb950 0%, #2ea043 100%);
-  color: white;
-  border: none;
+  background: linear-gradient(135deg, #00D4FF 0%, #0099CC 100%);
+  color: #0B0E14;
+  border: 1px solid rgba(0, 212, 255, 0.3);
   padding: 0.6rem 1.2rem;
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.9rem;
-  font-weight: 500;
+  font-weight: 600;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 2px 8px rgba(63, 185, 80, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 12px rgba(0, 212, 255, 0.35), 0 0 20px rgba(0, 212, 255, 0.15);
 }
 
 .btn-add-small:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(63, 185, 80, 0.4);
+  box-shadow: 0 4px 16px rgba(0, 212, 255, 0.5), 0 0 35px rgba(0, 212, 255, 0.25);
 }
 
 .btn-add-small:disabled {
@@ -584,12 +617,13 @@ body {
 .items-table th {
   padding: 1rem;
   text-align: left;
-  font-weight: 600;
-  color: #3fb950;
-  border-bottom: 1px solid rgba(99, 110, 123, 0.3);
+  font-weight: 700;
+  color: #00D4FF;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.3);
   font-size: 0.9rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  text-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
 }
 
 .items-table td {
@@ -626,9 +660,9 @@ body {
 }
 
 .cell-input {
-  background: rgba(22, 27, 34, 0.9);
-  border: 2px solid #3fb950;
-  color: #e6edf3;
+  background: rgba(11, 14, 20, 0.9);
+  border: 2px solid #00D4FF;
+  color: #E8EEF5;
   padding: 0.4rem 0.7rem;
   border-radius: 6px;
   font-size: 0.9rem;
@@ -639,7 +673,7 @@ body {
 
 .cell-input:focus {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(63, 185, 80, 0.2);
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.3), 0 0 20px rgba(0, 212, 255, 0.2);
 }
 
 .probability-cell {
@@ -674,12 +708,12 @@ body {
 }
 
 .statistics h3 {
-  background: linear-gradient(135deg, #3fb950 0%, #52c46c 100%);
+  background: linear-gradient(135deg, #00D4FF 0%, #A277FF 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   margin-bottom: 1rem;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .statistics p {

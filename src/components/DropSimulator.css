@@ -1,0 +1,285 @@
+.drop-simulator-fullscreen {
+  background: rgba(11, 14, 20, 0.9);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 16px;
+  padding: 2rem;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.simulator-header-fullscreen {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+  padding-bottom: 1.5rem;
+}
+
+.header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.simulator-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.simulator-header h3 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #00D4FF 0%, #A277FF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+}
+
+.simulator-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.control-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.control-group label {
+  font-size: 0.85rem;
+  color: #9BA8BD;
+  font-weight: 600;
+}
+
+.sim-input {
+  width: 120px;
+  padding: 0.5rem 0.75rem;
+  background: rgba(30, 38, 54, 0.8);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 8px;
+  color: #E8EEF5;
+  font-size: 0.9rem;
+  font-family: 'JetBrains Mono', monospace;
+  transition: all 0.15s;
+  outline: none;
+}
+
+.sim-input:focus {
+  border-color: #00D4FF;
+  box-shadow: 0 0 0 3px rgba(0, 212, 255, 0.15);
+}
+
+.checkbox-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-control input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: #A277FF;
+}
+
+.checkbox-control span {
+  font-size: 0.85rem;
+  color: #E8EEF5;
+  font-weight: 600;
+}
+
+/* Results Summary */
+.results-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.summary-card {
+  background: rgba(30, 38, 54, 0.6);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 10px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.summary-label {
+  font-size: 0.75rem;
+  color: #9BA8BD;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.summary-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #00D4FF 0%, #A277FF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Results Grid */
+.results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.result-card {
+  background: rgba(30, 38, 54, 0.6);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 10px;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+.result-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 212, 255, 0.4);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.result-card.selected {
+  border-color: #00D4FF;
+  background: rgba(0, 212, 255, 0.1);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.result-item-name {
+  font-family: 'JetBrains Mono', monospace;
+  color: #00D4FF;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.result-drop-rate {
+  font-family: 'JetBrains Mono', monospace;
+  color: #A277FF;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.result-bar-container {
+  height: 6px;
+  background: rgba(11, 14, 20, 0.8);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+
+.result-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #00D4FF 0%, #A277FF 100%);
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.result-stats {
+  display: flex;
+  gap: 1rem;
+}
+
+.result-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.result-stat-label {
+  font-size: 0.7rem;
+  color: #9BA8BD;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.result-stat-value {
+  font-family: 'JetBrains Mono', monospace;
+  color: #E8EEF5;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+/* Cumulative Chart */
+.cumulative-section {
+  background: rgba(30, 38, 54, 0.6);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  border-radius: 10px;
+  padding: 1.25rem;
+}
+
+.cumulative-section h4 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #9BA8BD;
+  margin: 0 0 1rem 0;
+}
+
+.cumulative-section .highlight {
+  color: #00D4FF;
+  font-weight: 700;
+}
+
+.chart-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chart-svg {
+  width: 100%;
+  height: auto;
+  background: rgba(11, 14, 20, 0.5);
+  border-radius: 8px;
+}
+
+.chart-label {
+  text-align: center;
+  font-size: 0.8rem;
+  color: #9BA8BD;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .simulator-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .simulator-controls {
+    width: 100%;
+  }
+
+  .results-grid {
+    grid-template-columns: 1fr;
+  }
+}

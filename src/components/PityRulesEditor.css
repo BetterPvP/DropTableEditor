@@ -1,0 +1,334 @@
+.pity-rules-editor {
+  background: rgba(11, 14, 20, 0.8);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 71, 87, 0.3);
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3), 0 0 40px rgba(255, 71, 87, 0.1);
+  transition: all 0.3s;
+}
+
+.pity-rules-editor.disabled {
+  opacity: 0.7;
+  border-color: rgba(107, 122, 153, 0.3);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.pity-rules-editor .editor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.2rem 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: linear-gradient(135deg, rgba(255, 71, 87, 0.1) 0%, rgba(255, 107, 107, 0.1) 100%);
+}
+
+.pity-rules-editor .editor-header:hover {
+  background: linear-gradient(135deg, rgba(255, 71, 87, 0.15) 0%, rgba(255, 107, 107, 0.15) 100%);
+}
+
+.pity-rules-editor.disabled .editor-header {
+  background: rgba(107, 122, 153, 0.1);
+}
+
+.pity-rules-editor h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #FF4757 0%, #FF6B6B 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin: 0;
+}
+
+.pity-rules-editor.disabled h3 {
+  background: linear-gradient(135deg, #6B7A99 0%, #9BA8BD 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.rule-count {
+  background: rgba(255, 71, 87, 0.2);
+  color: #FF4757;
+  padding: 0.3rem 0.8rem;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid rgba(255, 71, 87, 0.3);
+}
+
+.pity-rules-editor.disabled .rule-count {
+  background: rgba(107, 122, 153, 0.2);
+  color: #9BA8BD;
+  border-color: rgba(107, 122, 153, 0.3);
+}
+
+.disabled-badge {
+  background: rgba(107, 122, 153, 0.3);
+  color: #9BA8BD;
+  padding: 0.3rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-style: italic;
+  border: 1px solid rgba(107, 122, 153, 0.4);
+}
+
+.pity-rules-editor .editor-content {
+  padding: 1.5rem;
+  border-top: 1px solid rgba(255, 71, 87, 0.2);
+  animation: slideDown 0.3s ease-out;
+}
+
+.pity-rules-editor.disabled .editor-content {
+  border-top-color: rgba(107, 122, 153, 0.2);
+}
+
+.info-banner {
+  background: rgba(255, 184, 0, 0.1);
+  border: 1px solid rgba(255, 184, 0, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  color: #FFD700;
+  font-size: 0.9rem;
+}
+
+.info-banner strong {
+  color: #FFB800;
+  font-weight: 700;
+}
+
+.add-rule-section {
+  background: rgba(30, 38, 54, 0.4);
+  border: 1px solid rgba(255, 71, 87, 0.2);
+  border-radius: 10px;
+  padding: 1.2rem;
+  margin-bottom: 1.5rem;
+}
+
+.pity-rules-editor.disabled .add-rule-section {
+  border-color: rgba(107, 122, 153, 0.2);
+}
+
+.rule-inputs {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.input-group label {
+  font-size: 0.9rem;
+  color: #E8EEF5;
+  font-weight: 500;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.input-group .hint {
+  font-size: 0.75rem;
+  color: #9BA8BD;
+  font-weight: 400;
+  font-style: italic;
+}
+
+.pity-rules-editor .item-selector {
+  padding: 0.7rem;
+  background: rgba(11, 14, 20, 0.8);
+  border: 1px solid rgba(255, 71, 87, 0.3);
+  border-radius: 6px;
+  color: #E8EEF5;
+  font-size: 0.9rem;
+  transition: all 0.3s;
+}
+
+.pity-rules-editor .item-selector:focus {
+  outline: none;
+  border-color: #FF4757;
+  box-shadow: 0 0 0 2px rgba(255, 71, 87, 0.2);
+}
+
+.pity-rules-editor .item-selector:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.number-input {
+  padding: 0.7rem;
+  background: rgba(11, 14, 20, 0.8);
+  border: 1px solid rgba(255, 71, 87, 0.3);
+  border-radius: 6px;
+  color: #E8EEF5;
+  font-size: 0.9rem;
+  transition: all 0.3s;
+}
+
+.number-input:focus {
+  outline: none;
+  border-color: #FF4757;
+  box-shadow: 0 0 0 2px rgba(255, 71, 87, 0.2);
+}
+
+.number-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-add-rule {
+  background: linear-gradient(135deg, #FF4757 0%, #CC3A47 100%);
+  color: white;
+  border: 1px solid rgba(255, 71, 87, 0.3);
+  padding: 0.7rem 1.5rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 600;
+  transition: all 0.3s;
+  width: 100%;
+  box-shadow: 0 2px 12px rgba(255, 71, 87, 0.3);
+}
+
+.btn-add-rule:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(255, 71, 87, 0.5);
+}
+
+.btn-add-rule:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.pity-rules-editor .empty-message {
+  text-align: center;
+  padding: 2rem;
+  color: #9BA8BD;
+  font-style: italic;
+  background: rgba(30, 38, 54, 0.4);
+  border-radius: 8px;
+  border: 2px dashed rgba(255, 71, 87, 0.3);
+}
+
+.pity-rules-editor.disabled .empty-message {
+  border-color: rgba(107, 122, 153, 0.3);
+}
+
+.pity-rules-table {
+  overflow-x: auto;
+}
+
+.pity-rules-table table {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(30, 38, 54, 0.4);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.pity-rules-table thead {
+  background: rgba(48, 54, 61, 0.6);
+}
+
+.pity-rules-table th {
+  padding: 0.9rem;
+  text-align: left;
+  font-weight: 700;
+  color: #FF4757;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid rgba(255, 71, 87, 0.3);
+}
+
+.pity-rules-editor.disabled .pity-rules-table th {
+  color: #9BA8BD;
+  border-bottom-color: rgba(107, 122, 153, 0.3);
+}
+
+.pity-rules-table td {
+  padding: 0.9rem;
+  border-bottom: 1px solid rgba(255, 71, 87, 0.15);
+  color: #E8EEF5;
+}
+
+.pity-rules-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.pity-rules-table tbody tr:hover {
+  background: rgba(48, 54, 61, 0.4);
+}
+
+.item-cell .item-id {
+  font-family: 'JetBrains Mono', monospace;
+  color: #FF6B6B;
+  font-weight: 600;
+}
+
+.pity-rules-editor.disabled .item-cell .item-id {
+  color: #9BA8BD;
+}
+
+.table-input {
+  width: 80px;
+  padding: 0.5rem;
+  background: rgba(11, 14, 20, 0.8);
+  border: 1px solid rgba(255, 71, 87, 0.3);
+  border-radius: 4px;
+  color: #E8EEF5;
+  font-size: 0.85rem;
+  transition: all 0.3s;
+}
+
+.table-input:focus {
+  outline: none;
+  border-color: #FF4757;
+  box-shadow: 0 0 0 2px rgba(255, 71, 87, 0.2);
+}
+
+.table-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.effect-cell {
+  font-family: 'JetBrains Mono', monospace;
+  color: #FFB800;
+  font-size: 0.85rem;
+}
+
+.btn-remove-rule {
+  background: linear-gradient(135deg, #6B7A99 0%, #556688 100%);
+  color: white;
+  border: 1px solid rgba(107, 122, 153, 0.3);
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.btn-remove-rule:hover:not(:disabled) {
+  background: linear-gradient(135deg, #FF4757 0%, #CC3A47 100%);
+  border-color: rgba(255, 71, 87, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-remove-rule:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
