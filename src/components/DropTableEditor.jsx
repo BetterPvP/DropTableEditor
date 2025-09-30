@@ -73,7 +73,9 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, title }) {
 
     category.items.push({
       itemId: selectedItemId,
-      itemWeight: 1
+      itemWeight: 1,
+      minYield: 1,
+      maxYield: 1
     })
     onChange(newData)
   }
@@ -225,6 +227,8 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, title }) {
                     <tr>
                       <th>Item ID</th>
                       <th>Item Weight</th>
+                      <th>Min Yield</th>
+                      <th>Max Yield</th>
                       <th>Probability</th>
                       <th>Odds (1 in X)</th>
                       <th>Actions</th>
@@ -239,6 +243,8 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, title }) {
                         totalItemWeight
                       )
                       const odds = (probability > 0 ? 1 / probability : 0)
+                      const minYield = item.minYield ?? 1
+                      const maxYield = item.maxYield ?? 1
 
                       return (
                         <tr key={itemIndex}>
@@ -257,11 +263,30 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, title }) {
                               'number'
                             )}
                           </td>
+                          <td>
+                            {renderEditableCell(
+                              minYield,
+                              (val) => updateItem(catIndex, itemIndex, 'minYield', val),
+                              'number'
+                            )}
+                          </td>
+                          <td>
+                            {renderEditableCell(
+                              maxYield,
+                              (val) => updateItem(catIndex, itemIndex, 'maxYield', val),
+                              'number'
+                            )}
+                          </td>
                           <td className="probability-cell">
                             {(probability * 100).toFixed(4)}%
                           </td>
                           <td className="odds-cell">
                             {formatOdds(odds)}
+                            {minYield !== maxYield && (
+                              <div className="yield-info">
+                                ({minYield}-{maxYield}x)
+                              </div>
+                            )}
                           </td>
                           <td>
                             <button

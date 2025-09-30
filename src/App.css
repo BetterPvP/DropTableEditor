@@ -654,6 +654,13 @@ body {
   font-family: 'JetBrains Mono', monospace;
 }
 
+.yield-info {
+  color: #ffa657;
+  font-size: 0.85rem;
+  margin-top: 0.2rem;
+  font-weight: 600;
+}
+
 /* Statistics */
 .statistics {
   background: rgba(22, 27, 34, 0.6);
