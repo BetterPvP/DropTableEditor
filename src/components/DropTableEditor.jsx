@@ -86,8 +86,8 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, title }) {
     onChange(newData)
   }
 
-  const renderEditableCell = (value, onSave, type = 'text', options = null) => {
-    const cellKey = `${value}-${type}`
+  const renderEditableCell = (value, onSave, type = 'text', options = null, uniqueId = '') => {
+    const cellKey = `${uniqueId}-${type}-${value}`
 
     if (editingCell === cellKey) {
       if (options) {
@@ -180,7 +180,9 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, title }) {
                   {renderEditableCell(
                     category.categoryWeight,
                     (val) => updateCategory(catIndex, 'categoryWeight', val),
-                    'number'
+                    'number',
+                    null,
+                    `cat-${catIndex}-weight`
                   )}
                   <span className="category-chance">
                     ({((category.categoryWeight / totalDistinctWeight) * 100).toFixed(2)}% chance)
@@ -253,28 +255,35 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, title }) {
                               item.itemId,
                               (val) => updateItem(catIndex, itemIndex, 'itemId', val),
                               'text',
-                              registeredItems
+                              registeredItems,
+                              `item-${catIndex}-${itemIndex}-id`
                             )}
                           </td>
                           <td>
                             {renderEditableCell(
                               item.itemWeight,
                               (val) => updateItem(catIndex, itemIndex, 'itemWeight', val),
-                              'number'
+                              'number',
+                              null,
+                              `item-${catIndex}-${itemIndex}-weight`
                             )}
                           </td>
                           <td>
                             {renderEditableCell(
                               minYield,
                               (val) => updateItem(catIndex, itemIndex, 'minYield', val),
-                              'number'
+                              'number',
+                              null,
+                              `item-${catIndex}-${itemIndex}-minYield`
                             )}
                           </td>
                           <td>
                             {renderEditableCell(
                               maxYield,
                               (val) => updateItem(catIndex, itemIndex, 'maxYield', val),
-                              'number'
+                              'number',
+                              null,
+                              `item-${catIndex}-${itemIndex}-maxYield`
                             )}
                           </td>
                           <td className="probability-cell">
