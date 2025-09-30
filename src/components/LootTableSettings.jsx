@@ -129,8 +129,8 @@ function LootTableSettings({ data, onChange }) {
                   <label>Min Rolls:</label>
                   <input
                     type="number"
-                    min="1"
-                    value={config.rollCountFunction.minRolls || 1}
+                    min="0"
+                    value={config.rollCountFunction.minRolls || 0}
                     onChange={(e) => updateRollCountFunction('minRolls', Number(e.target.value))}
                     className="setting-input"
                   />

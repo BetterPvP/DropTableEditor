@@ -102,7 +102,7 @@ function DropTableBrowser({ onLoadTable }) {
                     <div className="table-info">
                       <h4>{table.variation_name}</h4>
                       <p className="table-meta">
-                        {table.data.categories?.length || 0} categories
+                        {table.data.items?.length || table.data.categories?.length || 0} items
                       </p>
                       <p className="table-date">
                         Updated: {new Date(table.updated_at).toLocaleDateString()}

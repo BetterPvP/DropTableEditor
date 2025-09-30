@@ -9,15 +9,26 @@ function PityRulesEditor({ data, onChange }) {
 
   const pityRules = data.pityRules || []
 
-  // Get all weighted items from categories
+  // Get all weighted items from either new items structure or old categories
   const availableItems = []
-  data.categories?.forEach(category => {
-    category.items?.forEach(item => {
+  
+  if (data.items) {
+    // New structure
+    data.items.forEach(item => {
       if (!availableItems.includes(item.itemId)) {
         availableItems.push(item.itemId)
       }
     })
-  })
+  } else if (data.categories) {
+    // Old structure (for backward compatibility)
+    data.categories.forEach(category => {
+      category.items?.forEach(item => {
+        if (!availableItems.includes(item.itemId)) {
+          availableItems.push(item.itemId)
+        }
+      })
+    })
+  }
 
   const addPityRule = () => {
     if (!selectedItem) {
