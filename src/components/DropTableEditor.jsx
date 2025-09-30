@@ -11,22 +11,24 @@ import { Save, Copy, Dices, X } from 'lucide-react'
 function DropTableEditor({ data, registeredItems, onChange, onExport, onDuplicate, title }) {
   const [selectedItem, setSelectedItem] = useState('')
   const [showSimulator, setShowSimulator] = useState(false)
+  const [localData, setLocalData] = useState(data)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
   // Initialize items array if using old category structure
   const items = useMemo(() => {
-    if (data.items) return data.items
+    if (localData.items) return localData.items
     // Migration from old category structure
     const migratedItems = []
-    data.categories?.forEach(cat => {
+    localData.categories?.forEach(cat => {
       cat.items?.forEach(item => {
         migratedItems.push(item)
       })
     })
     return migratedItems
-  }, [data])
+  }, [localData])
 
   const updateItem = useCallback((itemIndex, field, value) => {
-    const newData = { ...data }
+    const newData = { ...localData }
     if (!newData.items) newData.items = [...items]
 
     const numValue = Number(value)
@@ -69,13 +71,14 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, onDuplicat
     newData.items = [...newData.items]
     newData.items[itemIndex] = item
     delete newData.categories // Remove old structure
-    onChange(newData)
-  }, [data, items, onChange])
+    setLocalData(newData)
+    setHasUnsavedChanges(true)
+  }, [localData, items])
 
   const addItem = useCallback(() => {
     if (!selectedItem) return
 
-    const newData = { ...data }
+    const newData = { ...localData }
     if (!newData.items) newData.items = [...items]
 
     if (newData.items.find(i => i.itemId === selectedItem)) {
@@ -87,20 +90,33 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, onDuplicat
       itemWeight: 10,
       minYield: 1,
       maxYield: 1,
+      shouldDrop: true,
       replacementStrategy: 'UNSET'
     }]
     delete newData.categories
-    onChange(newData)
+    setLocalData(newData)
+    setHasUnsavedChanges(true)
     setSelectedItem('')
-  }, [data, items, selectedItem, onChange])
+  }, [localData, items, selectedItem])
 
   const removeItem = useCallback((itemIndex) => {
-    const newData = { ...data }
+    const newData = { ...localData }
     if (!newData.items) newData.items = [...items]
     newData.items = newData.items.filter((_, i) => i !== itemIndex)
     delete newData.categories
-    onChange(newData)
-  }, [data, items, onChange])
+    setLocalData(newData)
+    setHasUnsavedChanges(true)
+  }, [localData, items])
+
+  const saveChanges = useCallback(() => {
+    onChange(localData)
+    setHasUnsavedChanges(false)
+  }, [localData, onChange])
+
+  const handleLocalChange = useCallback((newData) => {
+    setLocalData(newData)
+    setHasUnsavedChanges(true)
+  }, [])
 
   const totalWeight = useMemo(() => {
     return items.reduce((sum, item) => sum + (item.itemWeight || 0), 0)
@@ -115,6 +131,15 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, onDuplicat
             {title}
           </h2>
           <div className="flex items-center gap-2">
+            <Button 
+              onClick={saveChanges} 
+              variant="default"
+              disabled={!hasUnsavedChanges}
+              className={hasUnsavedChanges ? "bg-green-600 hover:bg-green-700" : ""}
+            >
+              <Save className="w-4 h-4" />
+              {hasUnsavedChanges ? "Save Changes" : "Saved"}
+            </Button>
             <Button onClick={() => setShowSimulator(true)} variant="default">
               <Dices className="w-4 h-4" />
               Test Drops
@@ -133,9 +158,9 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, onDuplicat
         </div>
       </div>
 
-      <LootTableSettings data={data} onChange={onChange} />
-      <GuaranteedLootEditor data={data} registeredItems={registeredItems} onChange={onChange} />
-      <PityRulesEditor data={data} onChange={onChange} />
+      <LootTableSettings data={localData} onChange={handleLocalChange} />
+      <GuaranteedLootEditor data={localData} registeredItems={registeredItems} onChange={handleLocalChange} />
+      <PityRulesEditor data={localData} onChange={handleLocalChange} />
 
       {/* Weighted Items Section */}
       <div className="bg-slate-800/30 border border-slate-700/50 rounded-xl p-6 shadow-lg">
@@ -197,7 +222,7 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, onDuplicat
                   </div>
 
                   {/* Item Stats */}
-                  <div className="grid grid-cols-3 gap-2 mb-3">
+                  <div className="grid grid-cols-4 gap-2 mb-3">
                     <div>
                       <label className="block text-xs text-slate-400 mb-1">Weight</label>
                       <Input
@@ -226,6 +251,15 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, onDuplicat
                         value={item.maxYield ?? 1}
                         onChange={(e) => updateItem(index, 'maxYield', e.target.value)}
                         className="h-8 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Drop</label>
+                      <Input
+                        type="checkbox"
+                        checked={item.shouldDrop ?? true}
+                        onChange={(e) => updateItem(index, 'shouldDrop', e.target.checked)}
+                        className="h-3 w-3 scale-200 mt-3 ml-2"
                       />
                     </div>
                   </div>
@@ -280,11 +314,13 @@ function DropTableEditor({ data, registeredItems, onChange, onExport, onDuplicat
 
       {/* Simulator Modal */}
       <Dialog open={showSimulator} onOpenChange={setShowSimulator}>
-        <DialogContent onClose={() => setShowSimulator(false)} className="max-w-4xl">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>Drop Simulator</DialogTitle>
           </DialogHeader>
-          <DropSimulator data={{ ...data, items }} onChange={onChange} />
+          <div className="h-[600px]">
+            <DropSimulator data={{ ...localData, items }} />
+          </div>
         </DialogContent>
       </Dialog>
     </div>

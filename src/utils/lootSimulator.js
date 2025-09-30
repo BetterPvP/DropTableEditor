@@ -117,16 +117,29 @@ export function runAdvancedSimulation(dropTableData, numSimulations, options = {
   const progress = trackProgress ? createProgress() : null
 
   // Initialize tracking for all items
-  dropTableData.categories?.forEach(category => {
-    category.items?.forEach(item => {
-      results[item.itemId] = {
-        itemId: item.itemId,
-        timesReceived: 0,
-        rollsToGet: null,
-        failedRolls: 0,
-        distribution: []
-      }
+  // Handle both old categories structure and new items structure
+  const allItems = []
+  
+  if (dropTableData.categories) {
+    // Old structure
+    dropTableData.categories.forEach(category => {
+      category.items?.forEach(item => {
+        allItems.push(item)
+      })
     })
+  } else if (dropTableData.items) {
+    // New structure
+    allItems.push(...dropTableData.items)
+  }
+
+  allItems.forEach(item => {
+    results[item.itemId] = {
+      itemId: item.itemId,
+      timesReceived: 0,
+      rollsToGet: null,
+      failedRolls: 0,
+      distribution: []
+    }
   })
 
   // Run simulations
@@ -136,6 +149,11 @@ export function runAdvancedSimulation(dropTableData, numSimulations, options = {
     // Track results
     loot.forEach(item => {
       const result = results[item.itemId]
+      if (!result) {
+        console.warn(`Item ${item.itemId} not found in results tracking, skipping`)
+        return
+      }
+      
       result.timesReceived++
 
       if (result.rollsToGet === null) {
