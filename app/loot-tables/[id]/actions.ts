@@ -29,6 +29,15 @@ export async function saveLootTableAction({
   }
 
   const supabase = createServerSupabaseClient();
+  const { data: auth } = await supabase.auth.getUser();
+  const userId = auth.user?.id ?? null;
+
+  if (!userId) {
+    return {
+      ok: false,
+      error: 'Not authenticated',
+    } as const;
+  }
   const expectedVersion = definition.version;
   const nextVersion = expectedVersion + 1;
   const timestamp = new Date().toISOString();
@@ -39,7 +48,7 @@ export async function saveLootTableAction({
       name: definition.name,
       description: definition.description ?? null,
       updated_at: timestamp,
-      updated_by: null,
+      updated_by: userId,
       version: nextVersion,
       definition: {
         ...definition,

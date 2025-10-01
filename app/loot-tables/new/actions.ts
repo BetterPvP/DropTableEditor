@@ -24,6 +24,10 @@ export async function createLootTableAction(formData: FormData) {
   const { data: auth } = await supabase.auth.getUser();
   const userId = auth.user?.id ?? null;
 
+  if (!userId) {
+    return { ok: false, error: 'Not authenticated' } as const;
+  }
+
   const id = crypto.randomUUID();
   const timestamp = new Date().toISOString();
   const definition = lootTableDefinitionSchema.parse({

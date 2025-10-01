@@ -1,12 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useState } from 'react';
 import { CircleEllipsis, LogOut, MoonStar, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { useTransparency } from '@/components/transparency-provider';
+import { createBrowserSupabaseClient } from '@/supabase/client';
 
 interface AppHeaderProps {
   environment?: 'development' | 'staging' | 'production';
@@ -15,6 +17,18 @@ interface AppHeaderProps {
 export function AppHeader({ environment = 'development' }: AppHeaderProps) {
   const pathname = usePathname();
   const { reduced, toggle } = useTransparency();
+  const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    const supabase = createBrowserSupabaseClient();
+    await supabase.auth.signOut();
+    router.replace('/auth/sign-in');
+    router.refresh();
+    setSigningOut(false);
+  };
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-white/10 bg-slate-900/60 px-6 backdrop-blur-xl">
@@ -40,9 +54,9 @@ export function AppHeader({ environment = 'development' }: AppHeaderProps) {
         <Button variant="ghost" size="sm" asChild>
           <Link href="/settings">Account</Link>
         </Button>
-        <Button variant="outline" size="sm" className="gap-2">
+        <Button variant="outline" size="sm" className="gap-2" onClick={handleSignOut} disabled={signingOut}>
           <LogOut className="h-4 w-4" />
-          Sign out
+          {signingOut ? 'Signing out…' : 'Sign out'}
         </Button>
       </div>
     </header>

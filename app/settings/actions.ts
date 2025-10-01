@@ -30,6 +30,10 @@ export async function createInviteCodeAction(formData: FormData) {
   const { data: auth } = await supabase.auth.getUser();
   const userId = auth.user?.id ?? null;
 
+  if (!userId) {
+    return { ok: false, error: 'Not authenticated' } as const;
+  }
+
   const prefix = parsed.data.role.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6) || 'ADMIN';
   let code = (parsed.data.code as string | undefined)?.toUpperCase().replace(/\s+/g, '-');
   if (!code) {
@@ -68,6 +72,13 @@ export async function registerItemAction(formData: FormData) {
   }
 
   const supabase = createServerSupabaseClient();
+  const { data: auth } = await supabase.auth.getUser();
+  const userId = auth.user?.id ?? null;
+
+  if (!userId) {
+    return { ok: false, error: 'Not authenticated' } as const;
+  }
+
   const { error } = await supabase.from('items').insert({
     id: parsed.data.id,
     name: parsed.data.id,

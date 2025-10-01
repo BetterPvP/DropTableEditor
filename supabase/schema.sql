@@ -1,8 +1,8 @@
 -- Supabase schema for BetterPvP Admin Console
 -- Run with `supabase db push` or through the SQL editor.
 
-create extension if not exists "pgcrypto" with schema public;
-create extension if not exists "uuid-ossp" with schema public;
+create extension if not exists "pgcrypto";
+create extension if not exists "uuid-ossp";
 
 create table if not exists public.invite_codes (
   code text primary key,
@@ -49,39 +49,50 @@ alter table public.items enable row level security;
 alter table public.loot_tables enable row level security;
 alter table public.loot_table_guaranteed enable row level security;
 
-create policy if not exists "Invite codes readable by authenticated" on public.invite_codes
+drop policy if exists "Invite codes readable by authenticated" on public.invite_codes;
+create policy "Invite codes readable by authenticated" on public.invite_codes
   for select using (auth.role() = 'authenticated');
 
-create policy if not exists "Invite codes insert for authenticated" on public.invite_codes
+drop policy if exists "Invite codes insert for authenticated" on public.invite_codes;
+create policy "Invite codes insert for authenticated" on public.invite_codes
   for insert with check (auth.role() = 'authenticated');
 
-create policy if not exists "Invite codes update for authenticated" on public.invite_codes
+drop policy if exists "Invite codes update for authenticated" on public.invite_codes;
+create policy "Invite codes update for authenticated" on public.invite_codes
   for update using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
 
-create policy if not exists "Items readable by authenticated" on public.items
+drop policy if exists "Items readable by authenticated" on public.items;
+create policy "Items readable by authenticated" on public.items
   for select using (auth.role() = 'authenticated');
 
-create policy if not exists "Items upsert by authenticated" on public.items
+drop policy if exists "Items upsert by authenticated" on public.items;
+create policy "Items upsert by authenticated" on public.items
   for insert with check (auth.role() = 'authenticated');
 
-create policy if not exists "Items update by authenticated" on public.items
+drop policy if exists "Items update by authenticated" on public.items;
+create policy "Items update by authenticated" on public.items
   for update using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
 
-create policy if not exists "Loot tables readable by authenticated" on public.loot_tables
+drop policy if exists "Loot tables readable by authenticated" on public.loot_tables;
+create policy "Loot tables readable by authenticated" on public.loot_tables
   for select using (auth.role() = 'authenticated');
 
-create policy if not exists "Loot tables insert by authenticated" on public.loot_tables
+drop policy if exists "Loot tables insert by authenticated" on public.loot_tables;
+create policy "Loot tables insert by authenticated" on public.loot_tables
   for insert with check (auth.role() = 'authenticated');
 
-create policy if not exists "Loot tables update by authenticated" on public.loot_tables
+drop policy if exists "Loot tables update by authenticated" on public.loot_tables;
+create policy "Loot tables update by authenticated" on public.loot_tables
   for update using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
 
-create policy if not exists "Guaranteed loot readable by authenticated" on public.loot_table_guaranteed
+drop policy if exists "Guaranteed loot readable by authenticated" on public.loot_table_guaranteed;
+create policy "Guaranteed loot readable by authenticated" on public.loot_table_guaranteed
   for select using (auth.role() = 'authenticated');
 
-create policy if not exists "Guaranteed loot write by authenticated" on public.loot_table_guaranteed
+drop policy if exists "Guaranteed loot write by authenticated" on public.loot_table_guaranteed;
+create policy "Guaranteed loot write by authenticated" on public.loot_table_guaranteed
   for all using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');

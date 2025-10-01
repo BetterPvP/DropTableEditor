@@ -17,6 +17,10 @@ export async function duplicateLootTableAction({
   const { data: auth } = await supabase.auth.getUser();
   const userId = auth.user?.id ?? null;
 
+  if (!userId) {
+    return { ok: false, error: 'Not authenticated' } as const;
+  }
+
   const { data: table, error } = await supabase
     .from('loot_tables')
     .select('id, name, description, definition, metadata')
