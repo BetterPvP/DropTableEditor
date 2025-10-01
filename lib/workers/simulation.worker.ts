@@ -1,6 +1,13 @@
 /// <reference lib="webworker" />
 
-import { LootEntry, LootTableDefinition, PityRule, ProgressiveConfig, SimulationResult } from '../loot-tables/types';
+import {
+  LootEntry,
+  LootTableDefinition,
+  PityRule,
+  ProgressiveConfig,
+  SimulationResult,
+  SimulationTimelineEventType,
+} from '../loot-tables/types';
 
 interface StartMessage {
   type: 'start';
@@ -124,8 +131,15 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     {
       entry: LootEntry;
       totalDrops: number;
-      hits: number;
+      rollHits: number;
+      bundleHits: number;
       firstAppearance: number | null;
+      timeline: {
+        rollIndex: number;
+        run: number;
+        type: SimulationTimelineEventType;
+        quantity?: number;
+      }[];
     }
   >();
   const totalRollsByRun: number[] = [];
@@ -137,6 +151,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
 
   for (let run = 0; run < runs; run += 1) {
     const pityMisses: Record<string, number> = {};
+    const runHits = new Set<string>();
     const entries = entriesTemplate.map((entry) => ({
       ...entry,
       currentWeight: entry.weight,
@@ -160,17 +175,40 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
       if (!selected) break;
 
       const quantity = randomInt(rng, selected.minYield, selected.maxYield);
-      const existing = results.get(selected.id) ?? {
-        entry: { ...selected },
-        totalDrops: 0,
-        hits: 0,
-        firstAppearance: null as number | null,
-      };
+      const existing =
+        results.get(selected.id) ?? {
+          entry: { ...selected },
+          totalDrops: 0,
+          rollHits: 0,
+          bundleHits: 0,
+          firstAppearance: null as number | null,
+          timeline: [] as {
+            rollIndex: number;
+            run: number;
+            type: SimulationTimelineEventType;
+            quantity?: number;
+          }[],
+        };
       existing.totalDrops += quantity;
-      existing.hits += 1;
+      existing.rollHits += 1;
+      if (!runHits.has(selected.id)) {
+        existing.bundleHits += 1;
+        runHits.add(selected.id);
+      }
       if (existing.firstAppearance === null) {
         existing.firstAppearance = globalRollIndex + 1;
+        existing.timeline.push({
+          rollIndex: globalRollIndex + 1,
+          run,
+          type: 'appeared',
+        });
       }
+      existing.timeline.push({
+        rollIndex: globalRollIndex + 1,
+        run,
+        type: 'rolled',
+        quantity,
+      });
       results.set(selected.id, existing);
 
       // Reset pity counters for the selected entry, increment for the rest
@@ -189,6 +227,14 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
         if (target) {
           target.removed = true;
         }
+        const timelineEntry = results.get(selected.id);
+        if (timelineEntry) {
+          timelineEntry.timeline.push({
+            rollIndex: globalRollIndex + 1,
+            run,
+            type: 'consumed',
+          });
+        }
       }
 
       globalRollIndex += 1;
@@ -204,8 +250,11 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     maxYield: payload.entry.maxYield,
     itemId: payload.entry.itemId,
     firstAppearedAt: payload.firstAppearance,
-    probability: payload.hits / totalRolls,
+    probability: payload.rollHits / totalRolls,
     perRunAverage: payload.totalDrops / runs,
+    rollHits: payload.rollHits,
+    bundleHits: payload.bundleHits,
+    timeline: payload.timeline,
   }));
 
   const response: CompleteMessage = {
@@ -213,6 +262,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     result: {
       runs,
       durationMs: Date.now() - start,
+      totalRolls,
       entries: resultEntries,
     },
   };
