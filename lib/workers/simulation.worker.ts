@@ -7,6 +7,7 @@ import {
   ProgressiveConfig,
   SimulationResult,
   SimulationTimelineEventType,
+  SimulationResultEntrySource,
 } from '../loot-tables/types';
 
 interface StartMessage {
@@ -65,16 +66,17 @@ function getRollCount(strategy: LootTableDefinition['rollStrategy'], rng: () => 
 }
 
 function applyPityWeights(
-  entry: LootEntry,
+  entry: LootEntry & { currentWeight?: number },
   pityRules: Record<string, PityRule>,
   misses: Record<string, number>,
 ): number {
   const rule = pityRules[entry.id];
-  if (!rule) return entry.weight;
+  const baseWeight = entry.currentWeight ?? entry.weight;
+  if (!rule) return baseWeight;
   const missCount = misses[entry.id] ?? 0;
-  if (missCount < rule.maxAttempts) return entry.weight;
+  if (missCount < rule.maxAttempts) return baseWeight;
   const increments = Math.floor(missCount / rule.maxAttempts);
-  return entry.weight + increments * rule.weightIncrement;
+  return baseWeight + increments * rule.weightIncrement;
 }
 
 function adjustProgressiveWeights(
@@ -130,10 +132,12 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     string,
     {
       entry: LootEntry;
+      source: SimulationResultEntrySource;
       totalDrops: number;
       rollHits: number;
       bundleHits: number;
       firstAppearance: number | null;
+      firstRun: number | null;
       timeline: {
         rollIndex: number;
         run: number;
@@ -158,6 +162,39 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
       removed: false,
     }));
 
+    for (const guaranteedEntry of definition.guaranteed) {
+      const quantity = randomInt(rng, guaranteedEntry.minYield, guaranteedEntry.maxYield);
+      const existing =
+        results.get(guaranteedEntry.id) ?? {
+          entry: { ...guaranteedEntry },
+          source: 'guaranteed' as SimulationResultEntrySource,
+          totalDrops: 0,
+          rollHits: 0,
+          bundleHits: 0,
+          firstAppearance: null as number | null,
+          firstRun: null as number | null,
+          timeline: [] as {
+            rollIndex: number;
+            run: number;
+            type: SimulationTimelineEventType;
+            quantity?: number;
+          }[],
+        };
+      existing.totalDrops += quantity;
+      existing.rollHits += 1;
+      existing.bundleHits += 1;
+      if (existing.firstRun === null) {
+        existing.firstRun = run + 1;
+      }
+      existing.timeline.push({
+        rollIndex: 0,
+        run,
+        type: 'granted',
+        quantity,
+      });
+      results.set(guaranteedEntry.id, existing);
+    }
+
     const rolls = getRollCount(definition.rollStrategy, rng);
     totalRollsByRun.push(rolls);
 
@@ -178,10 +215,12 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
       const existing =
         results.get(selected.id) ?? {
           entry: { ...selected },
+          source: 'weighted' as SimulationResultEntrySource,
           totalDrops: 0,
           rollHits: 0,
           bundleHits: 0,
           firstAppearance: null as number | null,
+          firstRun: null as number | null,
           timeline: [] as {
             rollIndex: number;
             run: number;
@@ -191,6 +230,9 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
         };
       existing.totalDrops += quantity;
       existing.rollHits += 1;
+      if (existing.firstRun === null) {
+        existing.firstRun = run + 1;
+      }
       if (!runHits.has(selected.id)) {
         existing.bundleHits += 1;
         runHits.add(selected.id);
@@ -241,7 +283,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     }
   }
 
-  const totalRolls = totalRollsByRun.reduce((sum, count) => sum + count, 0) || 1;
+  const totalRolls = totalRollsByRun.reduce((sum, count) => sum + count, 0);
   const resultEntries = Array.from(results.entries()).map(([entryId, payload]) => ({
     entryId,
     type: payload.entry.type,
@@ -250,11 +292,18 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     maxYield: payload.entry.maxYield,
     itemId: payload.entry.itemId,
     firstAppearedAt: payload.firstAppearance,
-    probability: payload.rollHits / totalRolls,
+    firstRunAppearance: payload.firstRun,
+    probability:
+      payload.source === 'guaranteed'
+        ? 1
+        : totalRolls > 0
+          ? payload.rollHits / totalRolls
+          : 0,
     perRunAverage: payload.totalDrops / runs,
     rollHits: payload.rollHits,
     bundleHits: payload.bundleHits,
     timeline: payload.timeline,
+    source: payload.source,
   }));
 
   const response: CompleteMessage = {
