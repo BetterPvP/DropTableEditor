@@ -1,6 +1,13 @@
 /// <reference lib="webworker" />
 
-import { LootEntry, LootTableDefinition, PityRule, ProgressiveConfig, SimulationResult } from '../loot-tables/types';
+import {
+  LootEntry,
+  LootTableDefinition,
+  PityRule,
+  ProgressiveConfig,
+  SimulationResult,
+  SimulationResultEntryEvent,
+} from '../loot-tables/types';
 
 interface StartMessage {
   type: 'start';
@@ -124,8 +131,10 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     {
       entry: LootEntry;
       totalDrops: number;
-      hits: number;
+      rollHits: number;
+      bundleHits: number;
       firstAppearance: number | null;
+      events: SimulationResultEntryEvent[];
     }
   >();
   const totalRollsByRun: number[] = [];
@@ -137,6 +146,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
 
   for (let run = 0; run < runs; run += 1) {
     const pityMisses: Record<string, number> = {};
+    const hitsThisRun = new Set<string>();
     const entries = entriesTemplate.map((entry) => ({
       ...entry,
       currentWeight: entry.weight,
@@ -163,15 +173,24 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
       const existing = results.get(selected.id) ?? {
         entry: { ...selected },
         totalDrops: 0,
-        hits: 0,
+        rollHits: 0,
+        bundleHits: 0,
         firstAppearance: null as number | null,
+        events: [] as SimulationResultEntryEvent[],
       };
       existing.totalDrops += quantity;
-      existing.hits += 1;
+      existing.rollHits += 1;
+      existing.events.push({
+        run: run + 1,
+        rollIndex: i + 1,
+        globalRoll: globalRollIndex + 1,
+        quantity,
+      });
       if (existing.firstAppearance === null) {
         existing.firstAppearance = globalRollIndex + 1;
       }
       results.set(selected.id, existing);
+      hitsThisRun.add(selected.id);
 
       // Reset pity counters for the selected entry, increment for the rest
       if (definition.weightDistribution === 'PITY') {
@@ -193,6 +212,13 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
 
       globalRollIndex += 1;
     }
+
+    for (const entryId of hitsThisRun) {
+      const payload = results.get(entryId);
+      if (payload) {
+        payload.bundleHits += 1;
+      }
+    }
   }
 
   const totalRolls = totalRollsByRun.reduce((sum, count) => sum + count, 0) || 1;
@@ -200,12 +226,15 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     entryId,
     type: payload.entry.type,
     totalDrops: payload.totalDrops,
+    rollHits: payload.rollHits,
+    bundleHits: payload.bundleHits,
     minYield: payload.entry.minYield,
     maxYield: payload.entry.maxYield,
     itemId: payload.entry.itemId,
     firstAppearedAt: payload.firstAppearance,
-    probability: payload.hits / totalRolls,
+    probability: payload.rollHits / totalRolls,
     perRunAverage: payload.totalDrops / runs,
+    timeline: payload.events,
   }));
 
   const response: CompleteMessage = {

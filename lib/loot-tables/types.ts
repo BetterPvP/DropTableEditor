@@ -85,12 +85,22 @@ export interface SimulationResultEntry {
   entryId: string;
   type: LootType;
   totalDrops: number;
+  rollHits: number;
+  bundleHits: number;
   minYield: number;
   maxYield: number;
   itemId: string;
   firstAppearedAt: number | null;
   probability: number;
   perRunAverage: number;
+  timeline: SimulationResultEntryEvent[];
+}
+
+export interface SimulationResultEntryEvent {
+  run: number;
+  rollIndex: number;
+  globalRoll: number;
+  quantity: number;
 }
 
 export interface SimulationResult {
