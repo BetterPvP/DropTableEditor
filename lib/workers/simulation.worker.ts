@@ -68,14 +68,14 @@ function getRollCount(strategy: LootTableDefinition['rollStrategy'], rng: () => 
 function applyPityWeights(
   entry: LootEntry & { currentWeight?: number },
   pityRules: Record<string, PityRule>,
-  misses: Record<string, number>,
+  failedRuns: Record<string, number>,
 ): number {
   const rule = pityRules[entry.id];
   const baseWeight = entry.currentWeight ?? entry.weight;
   if (!rule) return baseWeight;
-  const missCount = misses[entry.id] ?? 0;
-  if (missCount < rule.maxAttempts) return baseWeight;
-  const increments = Math.floor(missCount / rule.maxAttempts);
+  const failedCount = failedRuns[entry.id] ?? 0;
+  if (failedCount === 0) return baseWeight;
+  const increments = Math.floor(failedCount / rule.maxAttempts);
   return baseWeight + increments * rule.weightIncrement;
 }
 
@@ -152,9 +152,9 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
 
   const start = Date.now();
   let globalRollIndex = 0;
+  const failedRuns: Record<string, number> = {};
 
   for (let run = 0; run < runs; run += 1) {
-    const pityMisses: Record<string, number> = {};
     const runHits = new Set<string>();
     const entries = entriesTemplate.map((entry) => ({
       ...entry,
@@ -204,7 +204,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
       const weightedEntries = entries.map((entry) => ({
         ...entry,
         currentWeight: definition.weightDistribution === 'PITY'
-          ? applyPityWeights(entry, pityLookup, pityMisses)
+          ? applyPityWeights(entry, pityLookup, failedRuns)
           : entry.currentWeight,
       }));
 
@@ -253,16 +253,6 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
       });
       results.set(selected.id, existing);
 
-      // Reset pity counters for the selected entry, increment for the rest
-      if (definition.weightDistribution === 'PITY') {
-        pityMisses[selected.id] = 0;
-        for (const entry of entries) {
-          if (entry.id !== selected.id && !entry.removed) {
-            pityMisses[entry.id] = (pityMisses[entry.id] ?? 0) + 1;
-          }
-        }
-      }
-
       const replacement = resolveReplacement(selected, definition.replacementStrategy);
       if (replacement === 'WITHOUT_REPLACEMENT') {
         const target = entries.find((entry) => entry.id === selected.id);
@@ -280,6 +270,19 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
       }
 
       globalRollIndex += 1;
+    }
+
+    // Update pity counters at the end of each run
+    if (definition.weightDistribution === 'PITY') {
+      for (const entry of entries) {
+        if (runHits.has(entry.id)) {
+          // Reset counter for entries that appeared in this run
+          failedRuns[entry.id] = 0;
+        } else {
+          // Increment counter for entries that didn't appear
+          failedRuns[entry.id] = (failedRuns[entry.id] ?? 0) + 1;
+        }
+      }
     }
   }
 
