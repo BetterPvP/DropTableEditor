@@ -1,118 +1,82 @@
-# Minecraft Drop Table Editor
+# BetterPvP Admin Console (Next.js)
 
-A web application for managing Minecraft dungeon drop tables stored as JSON files.
+Modernized administration console for the BetterPvP **Clans** loot table tooling. This repository contains a Next.js App Router implementation that embraces server-first rendering, shadcn/ui components, Supabase auth, and a dark glassmorphism aesthetic inspired by JetBrains IDEs.
 
-## Features
+## Getting Started
 
-- **Registered Items Management**: Add/remove items that can be used across all drop tables
-- **Multiple Drop Tables**: Load and manage multiple dungeon drop tables
-- **Variation Support**: Each dungeon can have multiple variations (basic mobs, boss, chest, etc.)
-- **Real-time Probability Calculation**: Shows exact probability and "1 in X" odds for each item
-- **Full Editing**: Change category weights, item weights, item IDs, add/remove categories or items
-- **Export**: Export individual variations or all variations for a dungeon
+### Prerequisites
+- Node.js 18+
+- npm 9+
+- Supabase project with existing BetterPvP schema
 
-## Installation
-
+### Installation
 ```bash
 npm install
 ```
 
-## Running the App
-
+### Development
 ```bash
 npm run dev
 ```
 
-Then open your browser to `http://localhost:5173`
+The development server starts on [http://localhost:3000](http://localhost:3000). Hot reloading is enabled.
 
-## Usage
-
-### 1. Register Items
-
-First, go to the "Registered Items" tab and add all Minecraft item IDs you want to use in your drop tables. Only registered items can be added to drop tables.
-
-Example items:
-- `minecraft:diamond`
-- `minecraft:iron_ingot`
-- `minecraft:gold_ingot`
-- `minecraft:emerald`
-- `minecraft:netherite_scrap`
-
-### 2. Load Drop Tables
-
-Click "Load Drop Table(s)" and select one or more JSON files containing your drop table data.
-
-Sample JSON structure:
-```json
-{
-  "basic_mobs": {
-    "categories": [
-      {
-        "categoryWeight": 10,
-        "items": [
-          {
-            "itemId": "minecraft:iron_ingot",
-            "itemWeight": 5
-          },
-          {
-            "itemId": "minecraft:gold_ingot",
-            "itemWeight": 3
-          }
-        ]
-      }
-    ]
-  },
-  "boss": {
-    "categories": [
-      {
-        "categoryWeight": 20,
-        "items": [
-          {
-            "itemId": "minecraft:diamond",
-            "itemWeight": 10
-          }
-        ]
-      }
-    ]
-  }
-}
+### Production Build
+```bash
+npm run build
+npm start
 ```
 
-### 3. Edit Drop Tables
+### Tests
+- Unit & integration: `npm test`
+- Playwright e2e: `npm run test:e2e`
 
-- Click on category weights or item weights to edit them
-- Click on item IDs to select from registered items
-- Add/remove categories and items using the buttons
-- Probabilities update in real-time
-
-### 4. Manage Variations
-
-- Click "+ Add Variation" to create new variations for a dungeon
-- Click the "✕" next to a variation name to remove it
-- Each variation is saved independently
-
-### 5. Export
-
-- Click "Export JSON" to export the current variation
-- Click "⬇ All" next to a dungeon name to export all variations
-
-## Probability Formula
-
-The probability for each item is calculated as:
-
+## Environment Variables
+Create a `.env.local` file with the following variables:
 ```
-probability = (categoryWeight / sum of distinct categoryWeights) * (itemWeight / sum of itemWeights in that category)
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-public-anon-key
+NEXT_PUBLIC_APP_ENV=development
 ```
 
-Odds formatting:
-- ≥1,000,000: `1 in 2.3M`
-- ≥1,000: `1 in 12,345`
-- else: `1 in 37.5`
+## Project Structure
+```
+app/                # App Router routes (SSR-first)
+components/         # shadcn-style UI primitives & feature components
+lib/                # Utilities, hooks, and sample data
+supabase/           # Client/server Supabase helpers
+sample_data/        # Legacy loot table fixtures for parity validation
+```
 
-## Sample Data
+Key routes:
+- `/` – Landing page with hero and tools showcase
+- `/auth/sign-in`, `/auth/sign-up` – Supabase auth with invite code enforcement (stubbed API handler)
+- `/loot-tables` – Searchable index
+- `/loot-tables/[id]` – Three-pane editor shell with autosave, inspector, and simulation drawer placeholder
+- `/loot-tables/new` – Draft creator experience using hybrid autosave
+- `/settings` – Account preferences stub
 
-Sample drop table files are included in the `sample_data/` directory:
-- `dungeon_temple.json`
-- `dungeon_fortress.json`
+## Styling & Components
+- Tailwind CSS + CSS variables for glassmorphism
+- shadcn-inspired components (`button`, `badge`, `card`, etc.)
+- Theme controls include a “Reduce glass” accessibility toggle stored in `localStorage`
 
-Load these files to see example drop tables with multiple variations.
+## Autosave Hook
+`useAutosave` implements a hybrid strategy combining debounce, on-blur, periodic, and before-unload saves while persisting crash-safe drafts to `localStorage`.
+
+## Simulation Worker (placeholder)
+The UI includes a simulation drawer entry point. The worker and metrics engine can be implemented in `components/simulation` alongside a `simulation.worker.ts` module.
+
+## Invite Codes API (stub)
+`/api/invite/validate` currently validates against a static allow list (`ADMIN-1234`, `DEV-SPACE`). Replace with Supabase-backed validation plus RLS enforcement in production.
+
+## Legacy Schema Parity
+Sample loot tables from the original Vite editor live under `sample_data/`. Use them for parity tests ensuring exported JSON remains byte-identical.
+
+## Tooling Notes
+- TanStack Query handles client-side fetching
+- Zod powers form validation and API route guards
+- Recharts, Web Workers, and deeper Supabase integration are ready to be wired into the new structure
+
+## License
+Internal BetterPvP tooling – not for public redistribution.
