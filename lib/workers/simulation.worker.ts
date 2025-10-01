@@ -124,8 +124,11 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     {
       entry: LootEntry;
       totalDrops: number;
-      hits: number;
+      rollHits: number;
+      bundleHits: number;
       firstAppearance: number | null;
+      hitsPerRun: number[];
+      yieldPerRun: number[];
     }
   >();
   const totalRollsByRun: number[] = [];
@@ -160,18 +163,29 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
       if (!selected) break;
 
       const quantity = randomInt(rng, selected.minYield, selected.maxYield);
-      const existing = results.get(selected.id) ?? {
-        entry: { ...selected },
-        totalDrops: 0,
-        hits: 0,
-        firstAppearance: null as number | null,
-      };
+      let existing = results.get(selected.id);
+      if (!existing) {
+        existing = {
+          entry: { ...selected },
+          totalDrops: 0,
+          rollHits: 0,
+          bundleHits: 0,
+          firstAppearance: null as number | null,
+          hitsPerRun: Array.from({ length: runs }, () => 0),
+          yieldPerRun: Array.from({ length: runs }, () => 0),
+        };
+        results.set(selected.id, existing);
+      }
       existing.totalDrops += quantity;
-      existing.hits += 1;
+      existing.rollHits += 1;
+      if (existing.hitsPerRun[run] === 0) {
+        existing.bundleHits += 1;
+      }
+      existing.hitsPerRun[run] += 1;
+      existing.yieldPerRun[run] += quantity;
       if (existing.firstAppearance === null) {
         existing.firstAppearance = globalRollIndex + 1;
       }
-      results.set(selected.id, existing);
 
       // Reset pity counters for the selected entry, increment for the rest
       if (definition.weightDistribution === 'PITY') {
@@ -195,17 +209,21 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     }
   }
 
-  const totalRolls = totalRollsByRun.reduce((sum, count) => sum + count, 0) || 1;
+  const totalRolls = totalRollsByRun.reduce((sum, count) => sum + count, 0);
   const resultEntries = Array.from(results.entries()).map(([entryId, payload]) => ({
     entryId,
     type: payload.entry.type,
     totalDrops: payload.totalDrops,
+    rollHits: payload.rollHits,
+    bundleHits: payload.bundleHits,
     minYield: payload.entry.minYield,
     maxYield: payload.entry.maxYield,
     itemId: payload.entry.itemId,
     firstAppearedAt: payload.firstAppearance,
-    probability: payload.hits / totalRolls,
-    perRunAverage: payload.totalDrops / runs,
+    probability: totalRolls === 0 ? 0 : payload.rollHits / totalRolls,
+    perRunAverage: runs === 0 ? 0 : payload.totalDrops / runs,
+    hitsPerRun: payload.hitsPerRun,
+    yieldPerRun: payload.yieldPerRun,
   }));
 
   const response: CompleteMessage = {
@@ -213,6 +231,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     result: {
       runs,
       durationMs: Date.now() - start,
+      totalRolls,
       entries: resultEntries,
     },
   };
