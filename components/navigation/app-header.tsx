@@ -52,7 +52,7 @@ export function AppHeader({ environment = 'development' }: AppHeaderProps) {
           {reduced ? 'Enable glass' : 'Reduce glass'}
         </Button>
         <Button variant="ghost" size="sm" asChild>
-          <Link href="/settings">Account</Link>
+          <Link href="/settings/account">Account</Link>
         </Button>
         <Button variant="outline" size="sm" className="gap-2" onClick={handleSignOut} disabled={signingOut}>
           <LogOut className="h-4 w-4" />

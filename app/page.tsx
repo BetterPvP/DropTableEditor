@@ -10,6 +10,12 @@ const tools = [
     href: '/loot-tables',
     icon: Workflow,
   },
+  {
+    name: 'Item Registry',
+    description: 'Manage the registered items available for this sites',
+    href: '/item-registry',
+    icon: Rocket,
+  }
 ];
 
 export default function HomePage() {
@@ -35,7 +41,7 @@ export default function HomePage() {
                 </Link>
               </Button>
               <Button variant="outline" size="lg" className="gap-2" asChild>
-                <Link href="/settings">View Settings</Link>
+                <Link href="/settings/account">View Account Settings</Link>
               </Button>
             </div>
           </div>
