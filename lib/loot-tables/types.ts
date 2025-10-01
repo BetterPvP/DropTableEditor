@@ -81,21 +81,31 @@ export const lootTableDefinitionSchema = z.object({
 
 export type LootTableDefinition = z.infer<typeof lootTableDefinitionSchema>;
 
+export interface SimulationTimelineEvent {
+  run: number;
+  globalRoll: number;
+  quantity: number;
+}
+
 export interface SimulationResultEntry {
   entryId: string;
   type: LootType;
-  totalDrops: number;
+  totalYield: number;
   minYield: number;
   maxYield: number;
   itemId: string;
   firstAppearedAt: number | null;
   probability: number;
   perRunAverage: number;
+  hits: number;
+  bundleHits: number;
+  timeline: SimulationTimelineEvent[];
 }
 
 export interface SimulationResult {
   runs: number;
   durationMs: number;
+  totalRolls: number;
   entries: SimulationResultEntry[];
 }
 

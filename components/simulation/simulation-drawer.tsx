@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LootTableDefinition, SimulationResult } from '@/lib/loot-tables/types';
 import type { Database } from '@/supabase/types';
 
@@ -37,6 +38,8 @@ export function SimulationDrawer({ open, onClose, definition, probabilities, ite
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<'overview' | 'inspector'>('overview');
+  const [sortMode, setSortMode] = useState<'yield' | 'hits' | 'bundle' | 'name'>('yield');
   const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
@@ -97,24 +100,36 @@ export function SimulationDrawer({ open, onClose, definition, probabilities, ite
 
   const tableRows = useMemo(() => {
     if (!result) return [];
-    return result.entries
-      .map((entry) => {
-        const baseProbability = probabilities[entry.entryId] ?? 0;
-        const item = items.find((candidate) => candidate.id === entry.itemId);
-        return {
-          ...entry,
-          baseProbability,
-          name: item?.name ?? entry.itemId,
-        };
-      })
-      .sort((a, b) => b.totalDrops - a.totalDrops);
-  }, [items, probabilities, result]);
+    const rows = result.entries.map((entry) => {
+      const baseProbability = probabilities[entry.entryId] ?? 0;
+      const item = items.find((candidate) => candidate.id === entry.itemId);
+      return {
+        ...entry,
+        baseProbability,
+        name: item?.name ?? entry.itemId,
+      };
+    });
+    const sorters: Record<typeof sortMode, (a: (typeof rows)[number], b: (typeof rows)[number]) => number> = {
+      yield: (a, b) => b.totalYield - a.totalYield,
+      hits: (a, b) => b.hits - a.hits,
+      bundle: (a, b) => b.bundleHits - a.bundleHits,
+      name: (a, b) => a.name.localeCompare(b.name),
+    };
+    const sorter = sorters[sortMode] ?? sorters.yield;
+    return rows.sort(sorter);
+  }, [items, probabilities, result, sortMode]);
+
+  useEffect(() => {
+    if (activeView === 'inspector' && selectedEntry === null) {
+      setActiveView('overview');
+    }
+  }, [activeView, selectedEntry]);
 
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/70 backdrop-blur-sm">
-      <div className="glass-panel flex h-full w-full max-w-4xl flex-col border-l border-white/10 p-6">
+      <div className="glass-panel flex h-full w-full max-w-6xl flex-col border-l border-white/10 p-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold text-white">Simulation</h2>
@@ -124,7 +139,7 @@ export function SimulationDrawer({ open, onClose, definition, probabilities, ite
             Close
           </Button>
         </div>
-        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <div className="mt-6 grid gap-6 lg:grid-cols-[340px_1fr]">
           <Card>
             <CardHeader>
               <CardTitle>Parameters</CardTitle>
@@ -192,17 +207,21 @@ export function SimulationDrawer({ open, onClose, definition, probabilities, ite
                     <span className="font-semibold">{result.durationMs} ms</span>
                   </div>
                   <div className="flex items-center justify-between">
+                    <span>Rolls processed</span>
+                    <span className="font-semibold">{result.totalRolls.toLocaleString()}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
                     <span>Unique entries</span>
                     <span className="font-semibold">{result.entries.length}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>Total drops</span>
-                    <span className="font-semibold">{result.entries.reduce((sum, e) => sum + e.totalDrops, 0).toLocaleString()}</span>
+                    <span>Total yielded</span>
+                    <span className="font-semibold">{result.entries.reduce((sum, e) => sum + e.totalYield, 0).toLocaleString()}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span>Avg drops/run</span>
+                    <span>Avg yield/run</span>
                     <span className="font-semibold">
-                      {(result.entries.reduce((sum, e) => sum + e.totalDrops, 0) / result.runs).toFixed(2)}
+                      {(result.entries.reduce((sum, e) => sum + e.totalYield, 0) / result.runs).toFixed(2)}
                     </span>
                   </div>
                   {result.entries.length > 0 && (
@@ -228,104 +247,227 @@ export function SimulationDrawer({ open, onClose, definition, probabilities, ite
             </CardContent>
           </Card>
         </div>
-        <Card className="mt-6 flex-1">
-          <CardHeader>
-            <CardTitle>Per-entry results</CardTitle>
-            <CardDescription>
-              Compare base probabilities to the observed distribution. Totals include yielded amounts for item entries.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="flex h-full flex-col">
-            <ScrollArea className="flex-1 min-h-[400px] max-h-[600px] rounded-xl border border-white/10 bg-black/40">
-              <table className="w-full text-sm text-foreground/80">
-                <thead className="sticky top-0 bg-black/80 text-xs uppercase tracking-wide text-foreground/60">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Loot</th>
-                    <th className="px-3 py-2 text-right">Type</th>
-                    <th className="px-3 py-2 text-right">Total</th>
-                    <th className="px-3 py-2 text-right">Avg</th>
-                    <th className="px-3 py-2 text-right">Sim %</th>
-                    <th className="px-3 py-2 text-right">Base %</th>
-                    <th className="px-3 py-2 text-right">First</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tableRows.length === 0 && (
-                    <tr>
-                      <td className="px-4 py-6 text-center text-foreground/50" colSpan={7}>
-                        Run the simulation to populate this table.
-                      </td>
-                    </tr>
-                  )}
-                  {tableRows.map((entry) => (
-                    <tr
-                      key={entry.entryId}
-                      className={`border-b border-white/5 cursor-pointer transition-colors hover:bg-primary/10 ${selectedEntry === entry.entryId ? 'bg-primary/20' : ''}`}
-                      onClick={() => setSelectedEntry(selectedEntry === entry.entryId ? null : entry.entryId)}
-                    >
-                      <td className="px-3 py-2">{entry.name}</td>
-                      <td className="px-3 py-2 text-right text-xs">{entry.type === 'dropped_item' ? 'Drop' : 'Give'}</td>
-                      <td className="px-3 py-2 text-right">{entry.totalDrops.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-right">{entry.perRunAverage.toFixed(2)}</td>
-                      <td className="px-3 py-2 text-right">{(entry.probability * 100).toFixed(2)}%</td>
-                      <td className="px-3 py-2 text-right">{(entry.baseProbability * 100).toFixed(2)}%</td>
-                      <td className="px-3 py-2 text-right text-xs">
-                        {entry.firstAppearedAt ? `#${entry.firstAppearedAt}` : 'Never'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </ScrollArea>
-            {selectedEntry && (() => {
-              const entry = tableRows.find((e) => e.entryId === selectedEntry);
-              if (!entry) return null;
-              return (
-                <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4">
-                  <h3 className="text-sm font-semibold text-white mb-3">Detailed Information: {entry.name}</h3>
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-foreground/60">Entry Type:</span>
-                      <span className="text-foreground/90">{entry.type === 'dropped_item' ? 'Dropped Item' : 'Given Item'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-foreground/60">Total Yield:</span>
-                      <span className="text-foreground/90 font-semibold">{entry.totalDrops.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-foreground/60">Per-Run Average:</span>
-                      <span className="text-foreground/90 font-semibold">{entry.perRunAverage.toFixed(3)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-foreground/60">Simulated Probability:</span>
-                      <span className="text-foreground/90 font-semibold">{(entry.probability * 100).toFixed(3)}%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-foreground/60">Base Probability:</span>
-                      <span className="text-foreground/90 font-semibold">{(entry.baseProbability * 100).toFixed(3)}%</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-foreground/60">Variance:</span>
-                      <span className="text-foreground/90 font-semibold">
-                        {((entry.probability - entry.baseProbability) * 100).toFixed(3)}%
-                      </span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-foreground/60">First Appearance:</span>
-                      <span className="text-foreground/90">{entry.firstAppearedAt ? `Roll #${entry.firstAppearedAt}` : 'Never appeared'}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-foreground/60">Drop Rate:</span>
-                      <span className="text-foreground/90">
-                        {entry.totalDrops > 0 ? `1 in ${Math.round(result!.runs / (entry.totalDrops / entry.perRunAverage))}` : 'N/A'}
-                      </span>
-                    </div>
-                  </div>
+        <div className="mt-6 flex-1 rounded-2xl border border-white/10 bg-black/30">
+          <div className="flex items-center justify-between border-b border-white/5 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm">
+              <Button
+                type="button"
+                size="sm"
+                variant={activeView === 'overview' ? 'default' : 'ghost'}
+                onClick={() => setActiveView('overview')}
+              >
+                Overview
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={activeView === 'inspector' ? 'default' : 'ghost'}
+                disabled={!selectedEntry}
+                onClick={() => selectedEntry && setActiveView('inspector')}
+              >
+                Entry inspector
+              </Button>
+            </div>
+            {activeView === 'overview' && (
+              <div className="flex items-center gap-2 text-xs text-foreground/60">
+                <span>Sort by</span>
+                <div className="w-40">
+                  <Select value={sortMode} onValueChange={(value) => setSortMode(value as typeof sortMode)}>
+                    <SelectTrigger>
+                      <SelectValue>
+                        {sortMode === 'yield'
+                          ? 'Most yielded'
+                          : sortMode === 'hits'
+                          ? 'Most rolled'
+                          : sortMode === 'bundle'
+                          ? 'Most bundles'
+                          : 'Alphabetical'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="yield">Most yielded</SelectItem>
+                      <SelectItem value="hits">Most rolled</SelectItem>
+                      <SelectItem value="bundle">Most bundles</SelectItem>
+                      <SelectItem value="name">Alphabetical</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              );
-            })()}
-          </CardContent>
-        </Card>
+              </div>
+            )}
+          </div>
+          {activeView === 'overview' ? (
+            <div className="flex h-full flex-col p-4">
+              <p className="text-sm text-foreground/50">
+                Compare base probabilities against observed outcomes. Totals include yielded amounts per entry.
+              </p>
+              <ScrollArea className="mt-4 flex-1 rounded-xl border border-white/10 bg-black/40">
+                <table className="w-full text-sm text-foreground/80">
+                  <thead className="sticky top-0 bg-black/80 text-xs uppercase tracking-wide text-foreground/60">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Loot</th>
+                      <th className="px-3 py-2 text-right">Type</th>
+                      <th className="px-3 py-2 text-right">Yielded</th>
+                      <th className="px-3 py-2 text-right">Roll hits</th>
+                      <th className="px-3 py-2 text-right">Bundle hits</th>
+                      <th className="px-3 py-2 text-right">Avg/run</th>
+                      <th className="px-3 py-2 text-right">Sim %</th>
+                      <th className="px-3 py-2 text-right">Base %</th>
+                      <th className="px-3 py-2 text-right">First</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tableRows.length === 0 && (
+                      <tr>
+                        <td className="px-4 py-6 text-center text-foreground/50" colSpan={9}>
+                          Run the simulation to populate this table.
+                        </td>
+                      </tr>
+                    )}
+                    {tableRows.map((entry) => (
+                      <tr
+                        key={entry.entryId}
+                        className={`border-b border-white/5 cursor-pointer transition-colors hover:bg-primary/10 ${selectedEntry === entry.entryId ? 'bg-primary/20' : ''}`}
+                        onClick={() => {
+                          const newSelection = selectedEntry === entry.entryId ? null : entry.entryId;
+                          setSelectedEntry(newSelection);
+                          setActiveView(newSelection ? 'inspector' : 'overview');
+                        }}
+                      >
+                        <td className="px-3 py-2">{entry.name}</td>
+                        <td className="px-3 py-2 text-right text-xs">{entry.type === 'dropped_item' ? 'Drop' : 'Give'}</td>
+                        <td className="px-3 py-2 text-right">{entry.totalYield.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right">{entry.hits.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right">{entry.bundleHits.toLocaleString()}</td>
+                        <td className="px-3 py-2 text-right">{entry.perRunAverage.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right">{(entry.probability * 100).toFixed(2)}%</td>
+                        <td className="px-3 py-2 text-right">{(entry.baseProbability * 100).toFixed(2)}%</td>
+                        <td className="px-3 py-2 text-right text-xs">
+                          {entry.firstAppearedAt ? `#${entry.firstAppearedAt}` : 'Never'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </ScrollArea>
+            </div>
+          ) : (
+            <div className="flex h-full flex-col gap-4 p-4">
+              {selectedEntry ? (
+                (() => {
+                  const entry = tableRows.find((candidate) => candidate.entryId === selectedEntry);
+                  if (!entry) return null;
+                  const totalBase = tableRows.reduce((sum, row) => sum + row.baseProbability, 0) || 1;
+                  const weightShare = entry.baseProbability / totalBase;
+                  const expectedHits = result?.totalRolls ? entry.baseProbability * result.totalRolls : 0;
+                  const heatRatio = expectedHits === 0 ? 0 : entry.hits / expectedHits;
+                  const heatWidth = Math.min(heatRatio, 2) / 2 * 100;
+                  const heatState = heatRatio > 1.1 ? 'hot' : heatRatio < 0.9 ? 'cold' : 'warm';
+                  const heatClass =
+                    heatState === 'hot'
+                      ? 'bg-rose-500/80'
+                      : heatState === 'cold'
+                      ? 'bg-sky-500/80'
+                      : 'bg-emerald-500/80';
+                  const timeline = entry.timeline;
+                  const totalRolls = result?.totalRolls ?? 0;
+                  return (
+                    <>
+                      <div className="flex items-start justify-between gap-6">
+                        <div>
+                          <h3 className="text-lg font-semibold text-white">{entry.name}</h3>
+                          <p className="text-sm text-foreground/60">Detailed roll history and probability diagnostics.</p>
+                        </div>
+                        <div className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-right text-xs text-foreground/60">
+                          <div>Type: {entry.type === 'dropped_item' ? 'Dropped item' : 'Given item'}</div>
+                          <div>Appeared: {entry.firstAppearedAt ? `roll #${entry.firstAppearedAt}` : 'never'}</div>
+                          <div>Bundles: {entry.bundleHits.toLocaleString()}</div>
+                        </div>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-xl border border-white/5 bg-black/50 p-4">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-foreground/60">Total yielded</span>
+                            <span className="font-semibold text-foreground">{entry.totalYield.toLocaleString()}</span>
+                          </div>
+                          <div className="mt-2 flex items-center justify-between text-xs text-foreground/60">
+                            <span>Roll hits</span>
+                            <span className="text-foreground/80">{entry.hits.toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-foreground/60">
+                            <span>Per run</span>
+                            <span className="text-foreground/80">{entry.perRunAverage.toFixed(3)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs text-foreground/60">
+                            <span>Variance</span>
+                            <span className="text-foreground/80">{((entry.probability - entry.baseProbability) * 100).toFixed(3)}%</span>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-white/5 bg-black/50 p-4">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-foreground/60">Weight share</span>
+                            <span className="font-semibold text-foreground">{(weightShare * 100).toFixed(2)}%</span>
+                          </div>
+                          <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-white/10">
+                            <div
+                              className="h-full rounded-full bg-primary"
+                              style={{ width: `${Math.min(1, weightShare) * 100}%` }}
+                            />
+                          </div>
+                          <p className="mt-2 text-xs text-foreground/50">
+                            Base probability {(entry.baseProbability * 100).toFixed(2)}% relative to table weights.
+                          </p>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-white/5 bg-black/50 p-4">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-foreground/60">Heat vs expected frequency</span>
+                          <span className="font-semibold text-foreground">
+                            {heatRatio === 0 ? 'No data' : `${heatRatio.toFixed(2)}x`}
+                          </span>
+                        </div>
+                        <div className="mt-2 h-3 w-full overflow-hidden rounded-full bg-white/10">
+                          <div className={`h-full ${heatClass}`} style={{ width: `${heatWidth}%` }} />
+                        </div>
+                        <p className="mt-2 text-xs text-foreground/50">
+                          Expected {(expectedHits || 0).toFixed(1)} hits based on base probability; observed {entry.hits.toLocaleString()}.
+                        </p>
+                      </div>
+                      <div className="rounded-xl border border-white/5 bg-black/50 p-4">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-foreground/60">Appearance timeline</span>
+                          <span className="text-xs text-foreground/50">
+                            Showing up to {timeline.length.toLocaleString()} recorded events
+                          </span>
+                        </div>
+                        <div className="relative mt-4 h-16 w-full rounded-lg bg-white/5">
+                          {totalRolls > 0 &&
+                            timeline.map((event, index) => {
+                              const left = Math.min(100, Math.max(0, ((event.globalRoll - 1) / totalRolls) * 100));
+                              return (
+                                <div
+                                  key={`${event.globalRoll}-${index}`}
+                                  className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/80 shadow"
+                                  style={{ left: `${left}%` }}
+                                  title={`Run #${event.run} • Roll #${event.globalRoll} • Yield ${event.quantity}`}
+                                />
+                              );
+                            })}
+                        </div>
+                        <p className="mt-2 text-xs text-foreground/50">
+                          Markers indicate when this entry yielded loot across the simulation timeline.
+                        </p>
+                      </div>
+                    </>
+                  );
+                })()
+              ) : (
+                <div className="flex h-full flex-col items-center justify-center text-center text-sm text-foreground/50">
+                  <p>Select a row from the overview to inspect its timeline and probability diagnostics.</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

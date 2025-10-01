@@ -1,6 +1,13 @@
 /// <reference lib="webworker" />
 
-import { LootEntry, LootTableDefinition, PityRule, ProgressiveConfig, SimulationResult } from '../loot-tables/types';
+import {
+  LootEntry,
+  LootTableDefinition,
+  PityRule,
+  ProgressiveConfig,
+  SimulationResult,
+  SimulationTimelineEvent,
+} from '../loot-tables/types';
 
 interface StartMessage {
   type: 'start';
@@ -119,13 +126,17 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
   const rng = createRng(message.seed ?? Date.now());
 
   const pityLookup = Object.fromEntries(definition.pityRules.map((rule) => [rule.entryId, rule]));
+  const MAX_TIMELINE_EVENTS = 250;
   const results = new Map<
     string,
     {
       entry: LootEntry;
-      totalDrops: number;
+      totalYield: number;
       hits: number;
+      bundleHits: number;
+      lastRunHit: number | null;
       firstAppearance: number | null;
+      timeline: SimulationTimelineEvent[];
     }
   >();
   const totalRollsByRun: number[] = [];
@@ -162,14 +173,28 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
       const quantity = randomInt(rng, selected.minYield, selected.maxYield);
       const existing = results.get(selected.id) ?? {
         entry: { ...selected },
-        totalDrops: 0,
+        totalYield: 0,
         hits: 0,
+        bundleHits: 0,
+        lastRunHit: null as number | null,
         firstAppearance: null as number | null,
+        timeline: [],
       };
-      existing.totalDrops += quantity;
+      existing.totalYield += quantity;
       existing.hits += 1;
+      if (existing.lastRunHit !== run) {
+        existing.bundleHits += 1;
+        existing.lastRunHit = run;
+      }
       if (existing.firstAppearance === null) {
         existing.firstAppearance = globalRollIndex + 1;
+      }
+      if (existing.timeline.length < MAX_TIMELINE_EVENTS) {
+        existing.timeline.push({
+          run: run + 1,
+          globalRoll: globalRollIndex + 1,
+          quantity,
+        });
       }
       results.set(selected.id, existing);
 
@@ -195,17 +220,20 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     }
   }
 
-  const totalRolls = totalRollsByRun.reduce((sum, count) => sum + count, 0) || 1;
+  const totalRolls = totalRollsByRun.reduce((sum, count) => sum + count, 0);
   const resultEntries = Array.from(results.entries()).map(([entryId, payload]) => ({
     entryId,
     type: payload.entry.type,
-    totalDrops: payload.totalDrops,
+    totalYield: payload.totalYield,
     minYield: payload.entry.minYield,
     maxYield: payload.entry.maxYield,
     itemId: payload.entry.itemId,
     firstAppearedAt: payload.firstAppearance,
-    probability: payload.hits / totalRolls,
-    perRunAverage: payload.totalDrops / runs,
+    probability: totalRolls === 0 ? 0 : payload.hits / totalRolls,
+    perRunAverage: payload.totalYield / runs,
+    hits: payload.hits,
+    bundleHits: payload.bundleHits,
+    timeline: payload.timeline,
   }));
 
   const response: CompleteMessage = {
@@ -213,6 +241,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     result: {
       runs,
       durationMs: Date.now() - start,
+      totalRolls,
       entries: resultEntries,
     },
   };
