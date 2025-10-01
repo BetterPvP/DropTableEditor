@@ -88,6 +88,10 @@ create policy "Loot tables update by authenticated" on public.loot_tables
   for update using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
 
+drop policy if exists "Loot tables delete by authenticated" on public.loot_tables;
+  create policy "Loot tables delete by authenticated" on public.loot_tables
+    for delete using (auth.role() = 'authenticated');
+
 drop policy if exists "Guaranteed loot readable by authenticated" on public.loot_table_guaranteed;
 create policy "Guaranteed loot readable by authenticated" on public.loot_table_guaranteed
   for select using (auth.role() = 'authenticated');

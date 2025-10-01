@@ -17,7 +17,8 @@
       "Bash(git pull:*)",
       "Bash(git stash:*)",
       "Bash(npx tailwindcss init:*)",
-      "Bash(npx shadcn@latest add:*)"
+      "Bash(npx shadcn@latest add:*)",
+      "Bash(npx supabase:*)"
     ],
     "deny": [],
     "ask": []

@@ -23,8 +23,10 @@ import {
 } from '@/lib/loot-tables/types';
 import { useAutosave } from '@/lib/hooks/use-autosave';
 import { saveLootTableAction } from '@/app/loot-tables/[id]/actions';
+import { deleteLootTableAction, duplicateLootTableAction } from '@/app/loot-tables/actions';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/supabase/types';
+import { useRouter } from 'next/navigation';
 
 interface LootTableEditorProps {
   tableId: string;
@@ -48,10 +50,13 @@ type Notification = {
 };
 
 export function LootTableEditor({ tableId, definition: initialDefinition, metadata, items }: LootTableEditorProps) {
+  const router = useRouter();
   const [definition, setDefinition] = useState<LootTableDefinition>(initialDefinition);
   const [error, setError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isSaving, startSaving] = useTransition();
+  const [isDeleting, startDeleting] = useTransition();
+  const [isDuplicating, startDuplicating] = useTransition();
   const [selectedWeightedItemId, setSelectedWeightedItemId] = useState<string>('');
   const [selectedWeightedType, setSelectedWeightedType] = useState<LootEntry['type']>('dropped_item');
   const [selectedGuaranteedItemId, setSelectedGuaranteedItemId] = useState<string>('');
@@ -237,6 +242,44 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
     });
   };
 
+  const handleDuplicate = () => {
+    startDuplicating(() => {
+      duplicateLootTableAction({ tableId })
+        .then((result) => {
+          if (!result?.ok) {
+            setError(result?.error ?? 'Unable to duplicate loot table.');
+            return;
+          }
+          addNotification('Loot table duplicated successfully', 'success');
+          router.push(`/loot-tables/${result.id}`);
+        })
+        .catch((error) => {
+          console.error('Duplicate action failed', error);
+          setError('Unable to duplicate loot table.');
+        });
+    });
+  };
+
+  const handleDelete = () => {
+    if (!confirm('Are you sure you want to delete this loot table? This action cannot be undone.')) {
+      return;
+    }
+    startDeleting(() => {
+      deleteLootTableAction({ tableId })
+        .then((result) => {
+          if (!result?.ok) {
+            setError(result?.error ?? 'Unable to delete loot table.');
+            return;
+          }
+          router.push('/loot-tables');
+        })
+        .catch((error) => {
+          console.error('Delete action failed', error);
+          setError('Unable to delete loot table.');
+        });
+    });
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/10 bg-slate-900/60 px-6 py-4 backdrop-blur-xl">
@@ -279,6 +322,24 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
             <Upload className="h-4 w-4" /> Import JSON
             <input type="file" accept="application/json" className="hidden" onChange={handleImport} />
           </label>
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2"
+            onClick={handleDuplicate}
+            disabled={isDuplicating}
+          >
+            <Copy className="h-4 w-4" /> {isDuplicating ? 'Duplicating...' : 'Duplicate'}
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            className="gap-2"
+            onClick={handleDelete}
+            disabled={isDeleting}
+          >
+            <Trash2 className="h-4 w-4" /> {isDeleting ? 'Deleting...' : 'Delete'}
+          </Button>
         </div>
       </div>
 
@@ -432,12 +493,14 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                           type="number"
                           min={1}
                           value={definition.rollStrategy.baseRolls}
-                          onChange={(event) =>
-                            handleRollStrategyChange({
-                              ...definition.rollStrategy,
-                              baseRolls: Number(event.target.value) || 1,
-                            })
-                          }
+                          onChange={(event) => {
+                            if (definition.rollStrategy.type === 'PROGRESSIVE') {
+                              handleRollStrategyChange({
+                                ...definition.rollStrategy,
+                                baseRolls: Number(event.target.value) || 1,
+                              });
+                            }
+                          }}
                           onBlur={autosave.handleBlur}
                         />
                       </div>
@@ -448,12 +511,14 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                           type="number"
                           min={0}
                           value={definition.rollStrategy.rollIncrement}
-                          onChange={(event) =>
-                            handleRollStrategyChange({
-                              ...definition.rollStrategy,
-                              rollIncrement: Number(event.target.value) || 0,
-                            })
-                          }
+                          onChange={(event) => {
+                            if (definition.rollStrategy.type === 'PROGRESSIVE') {
+                              handleRollStrategyChange({
+                                ...definition.rollStrategy,
+                                rollIncrement: Number(event.target.value) || 0,
+                              });
+                            }
+                          }}
                           onBlur={autosave.handleBlur}
                         />
                       </div>
@@ -464,12 +529,14 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                           type="number"
                           min={1}
                           value={definition.rollStrategy.maxRolls}
-                          onChange={(event) =>
-                            handleRollStrategyChange({
-                              ...definition.rollStrategy,
-                              maxRolls: Number(event.target.value) || definition.rollStrategy.maxRolls,
-                            })
-                          }
+                          onChange={(event) => {
+                            if (definition.rollStrategy.type === 'PROGRESSIVE') {
+                              handleRollStrategyChange({
+                                ...definition.rollStrategy,
+                                maxRolls: Number(event.target.value) || definition.rollStrategy.maxRolls,
+                              });
+                            }
+                          }}
                           onBlur={autosave.handleBlur}
                         />
                       </div>
@@ -488,12 +555,14 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                           type="number"
                           min={0}
                           value={definition.rollStrategy.min}
-                          onChange={(event) =>
-                            handleRollStrategyChange({
-                              ...definition.rollStrategy,
-                              min: Number(event.target.value) || 0,
-                            })
-                          }
+                          onChange={(event) => {
+                            if (definition.rollStrategy.type === 'RANDOM') {
+                              handleRollStrategyChange({
+                                ...definition.rollStrategy,
+                                min: Number(event.target.value) || 0,
+                              });
+                            }
+                          }}
                           onBlur={autosave.handleBlur}
                         />
                       </div>
@@ -504,12 +573,14 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                           type="number"
                           min={1}
                           value={definition.rollStrategy.max}
-                          onChange={(event) =>
-                            handleRollStrategyChange({
-                              ...definition.rollStrategy,
-                              max: Number(event.target.value) || definition.rollStrategy.max,
-                            })
-                          }
+                          onChange={(event) => {
+                            if (definition.rollStrategy.type === 'RANDOM') {
+                              handleRollStrategyChange({
+                                ...definition.rollStrategy,
+                                max: Number(event.target.value) || definition.rollStrategy.max,
+                              });
+                            }
+                          }}
                           onBlur={autosave.handleBlur}
                         />
                       </div>
@@ -625,68 +696,83 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 )}
 
                 {definition.weightDistribution === 'PROGRESSIVE' && (
-                  <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
-                    <p className="text-xs text-foreground/60">
-                      Progressive mode recentres weights after each roll. Max shift caps the adjustment, shift factor controls the strength, and variance scaling scales shifts based on how far an entry is from the pack.
-                    </p>
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <div className="space-y-1">
-                        <Label>Max shift</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={definition.progressive?.maxShift ?? 0}
-                          onChange={(event) => {
-                            const maxShift = Number(event.target.value) || 0;
-                            setDefinition((prev) => ({
-                              ...prev,
-                              progressive: { ...prev.progressive, maxShift },
-                            }));
-                          }}
-                          onBlur={autosave.handleBlur}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Shift factor</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          step="0.05"
-                          value={definition.progressive?.shiftFactor ?? 0}
-                          onChange={(event) => {
-                            const shiftFactor = Number(event.target.value) || 0;
-                            setDefinition((prev) => ({
-                              ...prev,
-                              progressive: { ...prev.progressive, shiftFactor },
-                            }));
-                          }}
-                          onBlur={autosave.handleBlur}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Variance scaling</Label>
-                        <Select
-                          value={definition.progressive?.varianceScaling ? 'true' : 'false'}
-                          onValueChange={(value) => {
-                            const varianceScaling = value === 'true';
-                            setDefinition((prev) => ({
-                              ...prev,
-                              progressive: { ...prev.progressive, varianceScaling },
-                            }));
-                          }}
-                        >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="false">Disabled</SelectItem>
-                            <SelectItem value="true">Enabled</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
+                <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                  <p className="text-xs text-foreground/60">
+                    Progressive mode recentres weights after each roll. Max shift caps the adjustment, shift factor controls the strength, and variance scaling scales shifts based on how far an entry is from the pack.
+                  </p>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="space-y-1">
+                      <Label>Max shift</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={definition.progressive?.maxShift ?? 0}
+                        onChange={(event) => {
+                          const maxShift = Number(event.target.value) || 0;
+                          setDefinition((prev) => ({
+                            ...prev,
+                            progressive: { 
+                              shiftFactor: 0, 
+                              varianceScaling: false,
+                              ...prev.progressive, 
+                              maxShift 
+                            },
+                          }));
+                        }}
+                        onBlur={autosave.handleBlur}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Shift factor</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        step="0.05"
+                        value={definition.progressive?.shiftFactor ?? 0}
+                        onChange={(event) => {
+                          const shiftFactor = Number(event.target.value) || 0;
+                          setDefinition((prev) => ({
+                            ...prev,
+                            progressive: { 
+                              maxShift: 0, 
+                              varianceScaling: false,
+                              ...prev.progressive, 
+                              shiftFactor 
+                            },
+                          }));
+                        }}
+                        onBlur={autosave.handleBlur}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Variance scaling</Label>
+                      <Select
+                        value={definition.progressive?.varianceScaling ? 'true' : 'false'}
+                        onValueChange={(value) => {
+                          const varianceScaling = value === 'true';
+                          setDefinition((prev) => ({
+                            ...prev,
+                            progressive: { 
+                              maxShift: 0, 
+                              shiftFactor: 0, 
+                              ...prev.progressive, 
+                              varianceScaling 
+                            },
+                          }));
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="false">Disabled</SelectItem>
+                          <SelectItem value="true">Enabled</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
-                )}
+                </div>
+              )}
               </section>
             </CardContent>
           </Card>

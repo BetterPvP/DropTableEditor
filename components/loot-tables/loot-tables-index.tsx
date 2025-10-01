@@ -7,10 +7,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowRight, Clock3, Plus, Search } from 'lucide-react';
+import { ArrowRight, Clock3, Plus, Search, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { LootTableDefinition } from '@/lib/loot-tables/types';
-import { duplicateLootTableAction } from '@/app/loot-tables/actions';
+import { duplicateLootTableAction, deleteLootTableAction } from '@/app/loot-tables/actions';
 
 export interface LootTableListItem {
   id: string;
@@ -31,9 +31,12 @@ export function LootTablesIndex({ query, tables }: LootTablesIndexProps) {
   const [value, setValue] = useState(query);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const router = useRouter();
   const [, startTransition] = useTransition();
   const [, startDuplicate] = useTransition();
+  const [, startDelete] = useTransition();
 
   const filteredTables = useMemo(() => {
     const normalized = value.trim().toLowerCase();
@@ -73,6 +76,31 @@ export function LootTablesIndex({ query, tables }: LootTablesIndexProps) {
         })
         .finally(() => {
           setDuplicatingId((current) => (current === tableId ? null : current));
+          router.refresh();
+        });
+    });
+  };
+
+  const handleDelete = (tableId: string) => {
+    if (!confirm('Are you sure you want to delete this loot table? This action cannot be undone.')) {
+      return;
+    }
+    setDeleteError(null);
+    setDeletingId(tableId);
+    startDelete(() => {
+      deleteLootTableAction({ tableId })
+        .then((result) => {
+          if (!result?.ok) {
+            setDeleteError(result?.error ?? 'Unable to delete loot table.');
+            return;
+          }
+        })
+        .catch((error) => {
+          console.error('Delete action failed', error);
+          setDeleteError('Unable to delete loot table.');
+        })
+        .finally(() => {
+          setDeletingId((current) => (current === tableId ? null : current));
           router.refresh();
         });
     });
@@ -120,6 +148,11 @@ export function LootTablesIndex({ query, tables }: LootTablesIndexProps) {
             {duplicateError}
           </div>
         )}
+        {deleteError && (
+          <div className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {deleteError}
+          </div>
+        )}
       </div>
       <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {filteredTables.map((table) => (
@@ -154,12 +187,21 @@ export function LootTablesIndex({ query, tables }: LootTablesIndexProps) {
                 </Button>
                 <Button
                   type="button"
-                  variant="secondary"
+                  variant="outline"
                   className="sm:w-32"
                   disabled={duplicatingId === table.id}
                   onClick={() => handleDuplicate(table.id)}
                 >
                   {duplicatingId === table.id ? 'Duplicating…' : 'Duplicate'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon"
+                  disabled={deletingId === table.id}
+                  onClick={() => handleDelete(table.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
             </CardContent>

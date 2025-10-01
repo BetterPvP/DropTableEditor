@@ -63,7 +63,6 @@ async function Content({ query }: { query: string }) {
 export default function LootTablesPage({ searchParams }: { searchParams: { q?: string } }) {
   return (
     <Suspense fallback={<div className="text-sm text-foreground/60">Loading loot tables…</div>}>
-      {/* @ts-expect-error Async Server Component */}
       <Content query={searchParams.q ?? ''} />
     </Suspense>
   );

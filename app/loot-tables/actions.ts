@@ -74,3 +74,35 @@ export async function duplicateLootTableAction({
 
   return { ok: true, id: newId } as const;
 }
+
+export async function deleteLootTableAction({
+  tableId,
+}: {
+  tableId: string;
+}) {
+  if (!tableId) {
+    return { ok: false, error: 'Missing loot table identifier.' } as const;
+  }
+
+  const supabase = createServerSupabaseClient();
+  const { data: auth } = await supabase.auth.getUser();
+  const userId = auth.user?.id ?? null;
+
+  if (!userId) {
+    return { ok: false, error: 'Not authenticated' } as const;
+  }
+
+  const { error } = await supabase
+    .from('loot_tables')
+    .delete()
+    .eq('id', tableId);
+
+  if (error) {
+    console.error('Failed to delete loot table', error);
+    return { ok: false, error: 'Unable to delete loot table.' } as const;
+  }
+
+  revalidatePath('/loot-tables');
+
+  return { ok: true } as const;
+}
