@@ -1,6 +1,14 @@
 'use client';
 
-import { FormEvent, useMemo, useState, useTransition } from 'react';
+import {
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import { Trash2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,13 +19,23 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Database } from '@/supabase/types';
 import { deleteItemAction, registerItemAction } from '@/app/settings/actions';
+import { createBrowserSupabaseClient } from '@/supabase/client';
+import { DEFAULT_ITEMS_PAGE_SIZE } from '@/lib/items/queries';
 
 interface ItemRegistryProps {
-  items: Database['public']['Tables']['items']['Row'][];
+  initialItems: Database['public']['Tables']['items']['Row'][];
+  initialTotalCount: number;
+  pageSize?: number;
 }
 
-export function ItemRegistry({ items }: ItemRegistryProps) {
+type ItemRow = Database['public']['Tables']['items']['Row'];
+
+export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAULT_ITEMS_PAGE_SIZE }: ItemRegistryProps) {
   const router = useRouter();
+  const supabase = useMemo(() => createBrowserSupabaseClient(), []);
+
+  const [items, setItems] = useState<ItemRow[]>(initialItems);
+  const [totalCount, setTotalCount] = useState(initialTotalCount);
   const [itemId, setItemId] = useState('');
   const [itemError, setItemError] = useState<string | null>(null);
   const [itemFeedback, setItemFeedback] = useState<string | null>(null);
@@ -28,17 +46,145 @@ export function ItemRegistry({ items }: ItemRegistryProps) {
   const [removingItemId, setRemovingItemId] = useState<string | null>(null);
   const [removingItem, startRemoveItem] = useTransition();
 
-  // new search state
   const [itemSearch, setItemSearch] = useState('');
-  const filteredItems = useMemo(() => {
-    const query = itemSearch.trim().toLowerCase();
-    if (!query) return items;
-    return items.filter((item) => {
-      const id = item.id.toLowerCase();
-      const name = (item.name ?? '').toLowerCase();
-      return id.includes(query) || name.includes(query);
-    });
-  }, [itemSearch, items]);
+  const [listError, setListError] = useState<string | null>(null);
+  const [isLoadingPage, setIsLoadingPage] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(initialItems.length < initialTotalCount);
+
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+  const observerRef = useRef<IntersectionObserver | null>(null);
+
+  useEffect(() => {
+    setItems(initialItems);
+    setTotalCount(initialTotalCount);
+    setHasMore(initialItems.length < initialTotalCount);
+  }, [initialItems, initialTotalCount]);
+
+  const fetchPage = useCallback(
+    async (from: number, search: string) => {
+      const rangeEnd = from + Math.max(pageSize, 1) - 1;
+      let query = supabase
+        .from('items')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(from, rangeEnd);
+
+      const trimmed = search.trim();
+      if (trimmed) {
+        const normalized = trimmed.replace(/[\\%_]/g, (match) => `\\${match}`);
+        query = query.or(`id.ilike.%${normalized}%,name.ilike.%${normalized}%`);
+      }
+
+      const { data, error, count } = await query;
+      if (error) {
+        throw error;
+      }
+
+      return {
+        items: (data ?? []) as ItemRow[],
+        count: typeof count === 'number' ? count : null,
+      };
+    },
+    [pageSize, supabase],
+  );
+
+  const refreshList = useCallback(
+    async (search: string) => {
+      setIsLoadingPage(true);
+      setListError(null);
+      try {
+        const { items: pageItems, count } = await fetchPage(0, search);
+        const total = typeof count === 'number' ? count : null;
+        setItems(pageItems);
+        setTotalCount(total ?? pageItems.length);
+        setHasMore(pageItems.length === pageSize && (total === null || pageItems.length < total));
+      } catch (error) {
+        console.error('Failed to load items', error);
+        setItems([]);
+        setTotalCount(0);
+        setHasMore(false);
+        setListError('Unable to load items.');
+      } finally {
+        setIsLoadingPage(false);
+      }
+    },
+    [fetchPage, pageSize],
+  );
+
+  const loadMoreItems = useCallback(async () => {
+    if (isLoadingMore || isLoadingPage || !hasMore) {
+      return;
+    }
+
+    setIsLoadingMore(true);
+    setListError(null);
+    const from = items.length;
+
+    try {
+      const { items: pageItems, count } = await fetchPage(from, itemSearch);
+      setItems((previous) => [...previous, ...pageItems]);
+      if (typeof count === 'number') {
+        setTotalCount(count);
+        if (from + pageItems.length >= count) {
+          setHasMore(false);
+        }
+      } else {
+        setTotalCount((previous) => previous + pageItems.length);
+        if (pageItems.length < pageSize) {
+          setHasMore(false);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load more items', error);
+      setListError('Unable to load more items.');
+      setHasMore(false);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [fetchPage, hasMore, isLoadingMore, isLoadingPage, itemSearch, items.length, pageSize]);
+
+  useEffect(() => {
+    if (observerRef.current) {
+      observerRef.current.disconnect();
+      observerRef.current = null;
+    }
+
+    const target = loadMoreRef.current;
+    if (!target || !hasMore) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          void loadMoreItems();
+        }
+      },
+      { rootMargin: '200px' },
+    );
+
+    observer.observe(target);
+    observerRef.current = observer;
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMore, loadMoreItems]);
+
+  useEffect(() => {
+    if (itemSearch.trim()) {
+      const timeout = window.setTimeout(() => {
+        void refreshList(itemSearch);
+      }, 300);
+      return () => window.clearTimeout(timeout);
+    }
+
+    setItems(initialItems);
+    setTotalCount(initialTotalCount);
+    setHasMore(initialItems.length < initialTotalCount);
+    setListError(null);
+  }, [initialItems, initialTotalCount, itemSearch, refreshList]);
 
   const handleRegisterItem = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -81,6 +227,9 @@ export function ItemRegistry({ items }: ItemRegistryProps) {
     });
   };
 
+  const isEmpty = items.length === 0;
+  const isSearching = itemSearch.trim().length > 0;
+
   return (
     <div className="space-y-8">
       <div>
@@ -95,7 +244,7 @@ export function ItemRegistry({ items }: ItemRegistryProps) {
             <CardTitle>Registered items</CardTitle>
             <CardDescription>Items listed here can be referenced by loot tables and simulations.</CardDescription>
           </div>
-          <Badge variant="default">{items.length} items</Badge>
+          <Badge variant="default">{totalCount} items</Badge>
         </CardHeader>
         <CardContent className="grid gap-6 lg:grid-cols-[320px_1fr]">
           <form className="space-y-4 rounded-2xl border border-white/10 bg-black/40 p-4" onSubmit={handleRegisterItem}>
@@ -129,6 +278,7 @@ export function ItemRegistry({ items }: ItemRegistryProps) {
                 placeholder="Search registered items..."
               />
             </div>
+            {listError && <p className="text-sm text-destructive">{listError}</p>}
             <ScrollArea className="min-h-[20rem] max-h-[32rem] rounded-2xl border border-white/10 bg-black/30">
               <table className="w-full text-sm text-foreground/80">
                 <thead className="sticky top-0 bg-black/60 text-xs uppercase tracking-wide text-foreground/60">
@@ -139,16 +289,22 @@ export function ItemRegistry({ items }: ItemRegistryProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredItems.length === 0 ? (
+                  {isLoadingPage && isEmpty ? (
+                    <tr>
+                      <td className="px-4 py-4 text-center text-foreground/60" colSpan={3}>
+                        Loading items…
+                      </td>
+                    </tr>
+                  ) : isEmpty ? (
                     <tr>
                       <td className="px-4 py-4 text-center text-foreground/50" colSpan={3}>
-                        {items.length === 0
-                          ? 'No items registered yet. Add at least one to start building loot tables.'
-                          : 'No items match your search.'}
+                        {isSearching
+                          ? 'No items match your search.'
+                          : 'No items registered yet. Add at least one to start building loot tables.'}
                       </td>
                     </tr>
                   ) : (
-                    filteredItems.map((item) => (
+                    items.map((item) => (
                       <tr key={item.id} className="border-b border-white/5">
                         <td className="px-4 py-2 font-mono text-xs">{item.id}</td>
                         <td className="px-4 py-2 text-xs text-foreground/60">
@@ -170,8 +326,16 @@ export function ItemRegistry({ items }: ItemRegistryProps) {
                       </tr>
                     ))
                   )}
+                  {isLoadingMore && !isEmpty && (
+                    <tr>
+                      <td className="px-4 py-4 text-center text-foreground/60" colSpan={3}>
+                        Loading more items…
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
+              <div ref={loadMoreRef} className="h-4" />
             </ScrollArea>
           </div>
 
