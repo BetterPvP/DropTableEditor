@@ -7,5 +7,6 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'Home', icon: 'home' },
   { href: '/loot-tables', label: 'Loot Tables', icon: 'grid' },
-  { href: '/settings', label: 'Settings', icon: 'settings' },
+  { href: '/settings/account', label: 'Account', icon: 'settings' },
+  { href: '/settings/item-registry', label: 'Item Registry', icon: 'package' },
 ];
