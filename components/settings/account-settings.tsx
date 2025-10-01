@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useTransition, useState } from 'react';
+import { FormEvent, useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import type { User } from '@supabase/supabase-js';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -30,6 +30,19 @@ export function AccountSettings({ user, invites, items }: AccountSettingsProps) 
   const [itemError, setItemError] = useState<string | null>(null);
   const [itemFeedback, setItemFeedback] = useState<string | null>(null);
   const [registeringItem, startRegisterItem] = useTransition();
+  const [itemSearch, setItemSearch] = useState('');
+
+  const filteredItems = useMemo(() => {
+    const query = itemSearch.trim().toLowerCase();
+    if (!query) {
+      return items;
+    }
+    return items.filter((item) => {
+      const id = item.id.toLowerCase();
+      const name = (item.name ?? '').toLowerCase();
+      return id.includes(query) || name.includes(query);
+    });
+  }, [itemSearch, items]);
 
   const handleInviteSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -214,33 +227,47 @@ export function AccountSettings({ user, invites, items }: AccountSettingsProps) 
             {itemError && <p className="text-sm text-destructive">{itemError}</p>}
             {itemFeedback && <p className="text-sm text-primary">{itemFeedback}</p>}
           </form>
-          <ScrollArea className="h-64 rounded-2xl border border-white/10 bg-black/30">
-            <table className="w-full text-sm text-foreground/80">
-              <thead className="sticky top-0 bg-black/60 text-xs uppercase tracking-wide text-foreground/60">
-                <tr>
-                  <th className="px-4 py-2 text-left">ID</th>
-                  <th className="px-4 py-2 text-left">Registered</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.length === 0 && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="item-search">Search</Label>
+              <Input
+                id="item-search"
+                value={itemSearch}
+                onChange={(event) => setItemSearch(event.target.value)}
+                placeholder="Search registered items..."
+              />
+            </div>
+            <ScrollArea className="min-h-[20rem] max-h-[32rem] rounded-2xl border border-white/10 bg-black/30">
+              <table className="w-full text-sm text-foreground/80">
+                <thead className="sticky top-0 bg-black/60 text-xs uppercase tracking-wide text-foreground/60">
                   <tr>
-                    <td className="px-4 py-4 text-center text-foreground/50" colSpan={2}>
-                      No items registered yet. Add at least one to start building loot tables.
-                    </td>
+                    <th className="px-4 py-2 text-left">ID</th>
+                    <th className="px-4 py-2 text-left">Registered</th>
                   </tr>
-                )}
-                {items.map((item) => (
-                  <tr key={item.id} className="border-b border-white/5">
-                    <td className="px-4 py-2 font-mono text-xs">{item.id}</td>
-                    <td className="px-4 py-2 text-xs text-foreground/60">
-                      Added {new Date(item.created_at).toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </ScrollArea>
+                </thead>
+                <tbody>
+                  {filteredItems.length === 0 ? (
+                    <tr>
+                      <td className="px-4 py-4 text-center text-foreground/50" colSpan={2}>
+                        {items.length === 0
+                          ? 'No items registered yet. Add at least one to start building loot tables.'
+                          : 'No items match your search.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredItems.map((item) => (
+                      <tr key={item.id} className="border-b border-white/5">
+                        <td className="px-4 py-2 font-mono text-xs">{item.id}</td>
+                        <td className="px-4 py-2 text-xs text-foreground/60">
+                          Added {new Date(item.created_at).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </ScrollArea>
+          </div>
         </CardContent>
       </Card>
     </div>
