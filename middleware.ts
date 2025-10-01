@@ -1,59 +1,33 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
+  const response = NextResponse.next({
     request,
   })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-          response = NextResponse.next({
-            request,
-          })
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-        },
-        remove(name: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-          response = NextResponse.next({
-            request,
-          })
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-        },
-      },
-    }
+  // Check for Supabase session cookies
+  const accessToken = request.cookies.get('sb-access-token')?.value
+  const refreshToken = request.cookies.get('sb-refresh-token')?.value
+
+  // Alternative cookie names (Supabase uses different formats)
+  const hasSupabaseCookie = request.cookies.getAll().some(cookie =>
+    cookie.name.includes('sb-') && cookie.name.includes('auth-token')
   )
 
-  // IMPORTANT: The Supabase client is created with cookie handlers above.
-  // This automatically refreshes expired sessions when cookies are accessed.
-  // The explicit getUser() call ensures the session is checked and refreshed.
-  // If you get __dirname errors on Vercel, you can comment out the line below.
-  // Session refresh will still work through the cookie handlers.
-  await supabase.auth.getUser()
+  const isAuthenticated = !!(accessToken || refreshToken || hasSupabaseCookie)
+
+  // Protected routes - redirect to sign-in if not authenticated
+  if (!isAuthenticated && !request.nextUrl.pathname.startsWith('/auth')) {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = '/auth/sign-in'
+    redirectUrl.searchParams.set('redirectTo', request.nextUrl.pathname)
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  // Redirect authenticated users away from auth pages
+  if (isAuthenticated && request.nextUrl.pathname.startsWith('/auth/sign-')) {
+    return NextResponse.redirect(new URL('/loot-tables', request.url))
+  }
 
   return response
 }
