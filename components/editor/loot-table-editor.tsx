@@ -2,16 +2,16 @@
 
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useTransition } from 'react';
-import { Download, Plus, Share2, Trash2, Upload, Wand2 } from 'lucide-react';
+import { Copy, Download, Plus, Share2, Trash2, Upload, Wand2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SaveIndicator } from '@/components/save-indicator';
 import { JSONPreview } from './json-preview';
-import { OpenTabsPanel } from './open-tabs-panel';
 import { SimulationDrawer } from '@/components/simulation/simulation-drawer';
 import {
   LootEntry,
@@ -31,7 +31,6 @@ interface LootTableEditorProps {
   definition: LootTableDefinition;
   metadata: Record<string, unknown> | null;
   items: Database['public']['Tables']['items']['Row'][];
-  openTabs: { id: string; name: string; version: number }[];
 }
 
 type RollStrategyState = LootTableDefinition['rollStrategy'];
@@ -42,7 +41,7 @@ function getReplacement(entry: LootEntry, fallback: ReplacementStrategy) {
   return entry.replacementStrategy === 'UNSET' ? fallback : entry.replacementStrategy;
 }
 
-export function LootTableEditor({ tableId, definition: initialDefinition, metadata, items, openTabs }: LootTableEditorProps) {
+export function LootTableEditor({ tableId, definition: initialDefinition, metadata, items }: LootTableEditorProps) {
   const [definition, setDefinition] = useState<LootTableDefinition>(initialDefinition);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -64,20 +63,14 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
   );
 
   const availableWeightedItems = useMemo(() => {
-    const takenIds = new Set([
-      ...definition.entries.map((entry) => entry.itemId),
-      ...definition.guaranteed.map((entry) => entry.itemId),
-    ]);
+    const takenIds = new Set(definition.entries.map((entry) => entry.itemId));
     return items.filter((item) => !takenIds.has(item.id));
-  }, [definition.entries, definition.guaranteed, items]);
+  }, [definition.entries, items]);
 
   const availableGuaranteedItems = useMemo(() => {
-    const takenIds = new Set([
-      ...definition.entries.map((entry) => entry.itemId),
-      ...definition.guaranteed.map((entry) => entry.itemId),
-    ]);
+    const takenIds = new Set(definition.guaranteed.map((entry) => entry.itemId));
     return items.filter((item) => !takenIds.has(item.id));
-  }, [definition.entries, definition.guaranteed, items]);
+  }, [definition.guaranteed, items]);
 
   const autosave = useAutosave({
     key: `loot-table:${tableId}`,
@@ -158,7 +151,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
     }
     setDefinition((prev) => {
       const existing = target === 'entries' ? prev.entries : prev.guaranteed;
-      if ([...prev.entries, ...prev.guaranteed].some((entry) => entry.itemId === item.id)) {
+      if (existing.some((entry) => entry.itemId === item.id)) {
         setError('That item is already present in this section.');
         return prev;
       }
@@ -173,7 +166,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
       };
       return {
         ...prev,
-        [target]: ensureUniqueEntries([...existing, entry]),
+        [target]: ensureUniqueEntries([entry, ...existing]),
       };
     });
     setInfo(`${type === 'dropped_item' ? 'Dropped' : 'Given'} item ${item.name} added. Adjust its values below.`);
@@ -270,10 +263,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
         </div>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[260px_1fr_320px]">
-        <div className="glass-panel hidden rounded-3xl border border-white/10 xl:flex">
-          <OpenTabsPanel activeId={tableId} tables={openTabs} />
-        </div>
+      <div className="grid gap-6 xl:grid-cols-[1fr_380px]">
         <div className="space-y-6">
           <Card>
             <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -353,141 +343,154 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 <p className="text-xs text-foreground/60">
                   Choose how many weighted pulls occur in each run: constant amounts, progressive ramps, or random ranges.
                 </p>
-                <div className="grid gap-4 sm:grid-cols-3">
-                  <Card className={cn('cursor-pointer border border-white/10 transition', definition.rollStrategy.type === 'CONSTANT' && 'border-primary/60 shadow-lg shadow-primary/10')}>
-                    <CardHeader onClick={() => handleRollStrategyChange({ type: 'CONSTANT', rolls: 1 })}>
-                      <CardTitle className="text-sm">Constant</CardTitle>
-                      <CardDescription>Same number of rolls every time.</CardDescription>
-                    </CardHeader>
-                    {definition.rollStrategy.type === 'CONSTANT' && (
-                      <CardContent className="space-y-2">
-                        <Label htmlFor="constant-rolls">Rolls</Label>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant={definition.rollStrategy.type === 'CONSTANT' ? 'default' : 'outline'}
+                    onClick={() => handleRollStrategyChange({ type: 'CONSTANT', rolls: 1 })}
+                  >
+                    Constant
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={definition.rollStrategy.type === 'PROGRESSIVE' ? 'default' : 'outline'}
+                    onClick={() =>
+                      handleRollStrategyChange({
+                        type: 'PROGRESSIVE',
+                        baseRolls: 1,
+                        rollIncrement: 1,
+                        maxRolls: 5,
+                      })
+                    }
+                  >
+                    Progressive increase
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={definition.rollStrategy.type === 'RANDOM' ? 'default' : 'outline'}
+                    onClick={() => handleRollStrategyChange({ type: 'RANDOM', min: 1, max: 3 })}
+                  >
+                    Random
+                  </Button>
+                </div>
+
+                {definition.rollStrategy.type === 'CONSTANT' && (
+                  <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                    <p className="text-xs text-foreground/60">Same number of rolls every time.</p>
+                    <div className="space-y-1">
+                      <Label htmlFor="constant-rolls">Rolls</Label>
+                      <Input
+                        id="constant-rolls"
+                        type="number"
+                        min={1}
+                        value={definition.rollStrategy.rolls}
+                        onChange={(event) =>
+                          handleRollStrategyChange({
+                            type: 'CONSTANT',
+                            rolls: Number(event.target.value) || 1,
+                          })
+                        }
+                        onBlur={autosave.handleBlur}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {definition.rollStrategy.type === 'PROGRESSIVE' && (
+                  <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                    <p className="text-xs text-foreground/60">Rolls climb until reaching a ceiling.</p>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="space-y-1">
+                        <Label htmlFor="progressive-base">Base rolls</Label>
                         <Input
-                          id="constant-rolls"
+                          id="progressive-base"
                           type="number"
                           min={1}
-                          value={definition.rollStrategy.rolls}
+                          value={definition.rollStrategy.baseRolls}
                           onChange={(event) =>
                             handleRollStrategyChange({
-                              type: 'CONSTANT',
-                              rolls: Number(event.target.value) || 1,
+                              ...definition.rollStrategy,
+                              baseRolls: Number(event.target.value) || 1,
                             })
                           }
                           onBlur={autosave.handleBlur}
                         />
-                      </CardContent>
-                    )}
-                  </Card>
-                  <Card className={cn('cursor-pointer border border-white/10 transition', definition.rollStrategy.type === 'PROGRESSIVE' && 'border-primary/60 shadow-lg shadow-primary/10')}>
-                    <CardHeader
-                      onClick={() =>
-                        handleRollStrategyChange({
-                          type: 'PROGRESSIVE',
-                          baseRolls: 1,
-                          rollIncrement: 1,
-                          maxRolls: 5,
-                        })
-                      }
-                    >
-                      <CardTitle className="text-sm">Progressive increase</CardTitle>
-                      <CardDescription>Rolls climb until reaching a ceiling.</CardDescription>
-                    </CardHeader>
-                    {definition.rollStrategy.type === 'PROGRESSIVE' && (
-                      <CardContent className="grid gap-2">
-                        <div className="space-y-1">
-                          <Label htmlFor="progressive-base">Base rolls</Label>
-                          <Input
-                            id="progressive-base"
-                            type="number"
-                            min={1}
-                            value={definition.rollStrategy.baseRolls}
-                            onChange={(event) =>
-                              handleRollStrategyChange({
-                                ...definition.rollStrategy,
-                                baseRolls: Number(event.target.value) || 1,
-                              })
-                            }
-                            onBlur={autosave.handleBlur}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="progressive-increment">Roll increment</Label>
-                          <Input
-                            id="progressive-increment"
-                            type="number"
-                            min={0}
-                            value={definition.rollStrategy.rollIncrement}
-                            onChange={(event) =>
-                              handleRollStrategyChange({
-                                ...definition.rollStrategy,
-                                rollIncrement: Number(event.target.value) || 0,
-                              })
-                            }
-                            onBlur={autosave.handleBlur}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="progressive-max">Max rolls</Label>
-                          <Input
-                            id="progressive-max"
-                            type="number"
-                            min={1}
-                            value={definition.rollStrategy.maxRolls}
-                            onChange={(event) =>
-                              handleRollStrategyChange({
-                                ...definition.rollStrategy,
-                                maxRolls: Number(event.target.value) || definition.rollStrategy.maxRolls,
-                              })
-                            }
-                            onBlur={autosave.handleBlur}
-                          />
-                        </div>
-                      </CardContent>
-                    )}
-                  </Card>
-                  <Card className={cn('cursor-pointer border border-white/10 transition', definition.rollStrategy.type === 'RANDOM' && 'border-primary/60 shadow-lg shadow-primary/10')}>
-                    <CardHeader onClick={() => handleRollStrategyChange({ type: 'RANDOM', min: 1, max: 3 })}>
-                      <CardTitle className="text-sm">Random</CardTitle>
-                      <CardDescription>Pick a roll count between two bounds.</CardDescription>
-                    </CardHeader>
-                    {definition.rollStrategy.type === 'RANDOM' && (
-                      <CardContent className="grid gap-2">
-                        <div className="space-y-1">
-                          <Label htmlFor="random-min">Min rolls</Label>
-                          <Input
-                            id="random-min"
-                            type="number"
-                            min={0}
-                            value={definition.rollStrategy.min}
-                            onChange={(event) =>
-                              handleRollStrategyChange({
-                                ...definition.rollStrategy,
-                                min: Number(event.target.value) || 0,
-                              })
-                            }
-                            onBlur={autosave.handleBlur}
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label htmlFor="random-max">Max rolls</Label>
-                          <Input
-                            id="random-max"
-                            type="number"
-                            min={1}
-                            value={definition.rollStrategy.max}
-                            onChange={(event) =>
-                              handleRollStrategyChange({
-                                ...definition.rollStrategy,
-                                max: Number(event.target.value) || definition.rollStrategy.max,
-                              })
-                            }
-                            onBlur={autosave.handleBlur}
-                          />
-                        </div>
-                      </CardContent>
-                    )}
-                  </Card>
-                </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="progressive-increment">Roll increment</Label>
+                        <Input
+                          id="progressive-increment"
+                          type="number"
+                          min={0}
+                          value={definition.rollStrategy.rollIncrement}
+                          onChange={(event) =>
+                            handleRollStrategyChange({
+                              ...definition.rollStrategy,
+                              rollIncrement: Number(event.target.value) || 0,
+                            })
+                          }
+                          onBlur={autosave.handleBlur}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="progressive-max">Max rolls</Label>
+                        <Input
+                          id="progressive-max"
+                          type="number"
+                          min={1}
+                          value={definition.rollStrategy.maxRolls}
+                          onChange={(event) =>
+                            handleRollStrategyChange({
+                              ...definition.rollStrategy,
+                              maxRolls: Number(event.target.value) || definition.rollStrategy.maxRolls,
+                            })
+                          }
+                          onBlur={autosave.handleBlur}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {definition.rollStrategy.type === 'RANDOM' && (
+                  <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                    <p className="text-xs text-foreground/60">Pick a roll count between two bounds.</p>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="random-min">Min rolls</Label>
+                        <Input
+                          id="random-min"
+                          type="number"
+                          min={0}
+                          value={definition.rollStrategy.min}
+                          onChange={(event) =>
+                            handleRollStrategyChange({
+                              ...definition.rollStrategy,
+                              min: Number(event.target.value) || 0,
+                            })
+                          }
+                          onBlur={autosave.handleBlur}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="random-max">Max rolls</Label>
+                        <Input
+                          id="random-max"
+                          type="number"
+                          min={1}
+                          value={definition.rollStrategy.max}
+                          onChange={(event) =>
+                            handleRollStrategyChange({
+                              ...definition.rollStrategy,
+                              max: Number(event.target.value) || definition.rollStrategy.max,
+                            })
+                          }
+                          onBlur={autosave.handleBlur}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </section>
 
               <section className="space-y-4">
@@ -517,23 +520,26 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                       <div key={rule.entryId} className="grid gap-2 rounded-xl border border-white/10 bg-black/40 p-3 sm:grid-cols-3">
                         <div className="space-y-1">
                           <Label>Entry</Label>
-                          <select
-                            className="w-full rounded-md border border-white/10 bg-transparent px-3 py-2 text-sm"
+                          <Select
                             value={rule.entryId}
-                            onChange={(event) => {
-                              const entryId = event.target.value;
+                            onValueChange={(entryId) => {
                               setDefinition((prev) => ({
                                 ...prev,
                                 pityRules: prev.pityRules.map((r, i) => (i === index ? { ...r, entryId } : r)),
                               }));
                             }}
                           >
-                            {definition.entries.map((entry) => (
-                              <option key={entry.id} value={entry.id} className="bg-slate-900">
-                                {items.find((item) => item.id === entry.itemId)?.name ?? entry.itemId}
-                              </option>
-                            ))}
-                          </select>
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {definition.entries.map((entry) => (
+                                <SelectItem key={entry.id} value={entry.id}>
+                                  {items.find((item) => item.id === entry.itemId)?.name ?? entry.itemId}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div className="space-y-1">
                           <Label>Max attempts</Label>
@@ -634,29 +640,174 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                       </div>
                       <div className="space-y-1">
                         <Label>Variance scaling</Label>
-                        <select
-                          className="w-full rounded-md border border-white/10 bg-transparent px-3 py-2 text-sm"
+                        <Select
                           value={definition.progressive?.varianceScaling ? 'true' : 'false'}
-                          onChange={(event) => {
-                            const varianceScaling = event.target.value === 'true';
+                          onValueChange={(value) => {
+                            const varianceScaling = value === 'true';
                             setDefinition((prev) => ({
                               ...prev,
                               progressive: { ...prev.progressive, varianceScaling },
                             }));
                           }}
                         >
-                          <option value="false" className="bg-slate-900">
-                            Disabled
-                          </option>
-                          <option value="true" className="bg-slate-900">
-                            Enabled
-                          </option>
-                        </select>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="false">Disabled</SelectItem>
+                            <SelectItem value="true">Enabled</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                   </div>
                 )}
               </section>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <CardTitle>Guaranteed loot</CardTitle>
+                  <CardDescription>
+                    Always drop on top of the weighted pool.
+                  </CardDescription>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Select
+                    value={selectedGuaranteedItemId}
+                    onValueChange={setSelectedGuaranteedItemId}
+                    disabled={availableGuaranteedItems.length === 0}
+                  >
+                    <SelectTrigger className="sm:w-48">
+                      <SelectValue placeholder={availableGuaranteedItems.length === 0 ? "No available items" : "Select item"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableGuaranteedItems.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={selectedGuaranteedType}
+                    onValueChange={(value) => setSelectedGuaranteedType(value as LootEntry['type'])}
+                  >
+                    <SelectTrigger className="sm:w-44">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="given_item">Given item</SelectItem>
+                      <SelectItem value="dropped_item">Dropped item</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => addLoot(selectedGuaranteedItemId, 'guaranteed', selectedGuaranteedType)}
+                    disabled={availableGuaranteedItems.length === 0 || !selectedGuaranteedItemId}
+                  >
+                    <Plus className="h-4 w-4" /> Add guaranteed loot
+                  </Button>
+                </div>
+              </div>
+              <p className="text-xs text-foreground/50">
+                Guaranteed loot fires after the weighted rolls and is ideal for quest rewards or pity items. Items can appear in both guaranteed and weighted loot sections.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {definition.guaranteed.length === 0 && (
+                <p className="rounded-xl border border-dashed border-white/10 bg-black/40 p-4 text-sm text-foreground/60">
+                  Add a given item to define guaranteed drops such as quest rewards.
+                </p>
+              )}
+              {definition.guaranteed.map((entry) => {
+                const item = items.find((itemRecord) => itemRecord.id === entry.itemId);
+                return (
+                  <div key={entry.id} className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/40 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-white">{item?.name ?? entry.itemId}</p>
+                        <Badge
+                          variant={entry.type === 'dropped_item' ? 'destructive' : 'default'}
+                          className={entry.type === 'given_item' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : ''}
+                        >
+                          {entry.type === 'dropped_item' ? 'Dropped' : 'Given'}
+                        </Badge>
+                      </div>
+                      <Button type="button" variant="ghost" size="icon" onClick={() => removeEntry(entry.id, 'guaranteed')}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-4">
+                      <div className="space-y-1">
+                        <Label>Weight</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={entry.weight}
+                          onChange={(event) =>
+                            handleGuaranteedChange(entry.id, { weight: Number(event.target.value) || 0 })
+                          }
+                          onBlur={autosave.handleBlur}
+                        />
+                        <p className="text-xs text-foreground/50">Weight is stored for export parity even though guarantees always trigger.</p>
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Min yield</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          value={entry.minYield}
+                          onChange={(event) =>
+                            handleGuaranteedChange(entry.id, { minYield: Number(event.target.value) || 0 })
+                          }
+                          onBlur={autosave.handleBlur}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Max yield</Label>
+                        <Input
+                          type="number"
+                          min={entry.minYield}
+                          value={entry.maxYield}
+                          onChange={(event) =>
+                            handleGuaranteedChange(entry.id, { maxYield: Number(event.target.value) || entry.maxYield })
+                          }
+                          onBlur={autosave.handleBlur}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label>Replacement</Label>
+                        <Select
+                          value={entry.replacementStrategy}
+                          onValueChange={(value) =>
+                            handleGuaranteedChange(entry.id, {
+                              replacementStrategy: value as ReplacementStrategy,
+                            })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {replacementStrategies.map((strategy) => (
+                              <SelectItem key={strategy} value={strategy}>
+                                {strategy}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-foreground/50">Guarantees rarely need overrides, but the option is here for parity.</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
 
@@ -670,31 +821,34 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                   </CardDescription>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <select
-                    className="w-full rounded-md border border-white/10 bg-transparent px-3 py-2 text-sm sm:w-48"
+                  <Select
                     value={selectedWeightedItemId}
-                    onChange={(event) => setSelectedWeightedItemId(event.target.value)}
+                    onValueChange={setSelectedWeightedItemId}
                     disabled={availableWeightedItems.length === 0}
                   >
-                    {availableWeightedItems.length === 0 && <option className="bg-slate-900">No available items</option>}
-                    {availableWeightedItems.map((item) => (
-                      <option key={item.id} value={item.id} className="bg-slate-900">
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="w-full rounded-md border border-white/10 bg-transparent px-3 py-2 text-sm sm:w-44"
+                    <SelectTrigger className="sm:w-48">
+                      <SelectValue placeholder={availableWeightedItems.length === 0 ? "No available items" : "Select item"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableWeightedItems.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
                     value={selectedWeightedType}
-                    onChange={(event) => setSelectedWeightedType(event.target.value as LootEntry['type'])}
+                    onValueChange={(value) => setSelectedWeightedType(value as LootEntry['type'])}
                   >
-                    <option value="dropped_item" className="bg-slate-900">
-                      Dropped item
-                    </option>
-                    <option value="given_item" className="bg-slate-900">
-                      Given item
-                    </option>
-                  </select>
+                    <SelectTrigger className="sm:w-44">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="dropped_item">Dropped item</SelectItem>
+                      <SelectItem value="given_item">Given item</SelectItem>
+                    </SelectContent>
+                  </Select>
                   <Button
                     type="button"
                     variant="outline"
@@ -707,7 +861,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 </div>
               </div>
               <p className="text-xs text-foreground/50">
-                Select an item and type to append new weighted loot. Items already used in this table are hidden to prevent duplicates.
+                Select an item and type to add new weighted loot. Items already in weighted loot are hidden to prevent duplicates within this section.
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -730,9 +884,14 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 return (
                   <div key={entry.id} className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/40 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
+                      <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-white">{item?.name ?? entry.itemId}</p>
-                        <p className="text-xs text-foreground/50">{entry.type === 'dropped_item' ? 'Dropped item' : 'Given item'}</p>
+                        <Badge
+                          variant={entry.type === 'dropped_item' ? 'destructive' : 'default'}
+                          className={entry.type === 'given_item' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : ''}
+                        >
+                          {entry.type === 'dropped_item' ? 'Dropped' : 'Given'}
+                        </Badge>
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant="info">{(probability * 100).toFixed(2)}%</Badge>
@@ -741,27 +900,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                         </Button>
                       </div>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-5">
-                      <div className="space-y-1">
-                        <Label>Type</Label>
-                        <select
-                          className="w-full rounded-md border border-white/10 bg-transparent px-3 py-2 text-sm"
-                          value={entry.type}
-                          onChange={(event) =>
-                            handleEntryChange(entry.id, {
-                              type: event.target.value as LootEntry['type'],
-                            })
-                          }
-                        >
-                          <option value="dropped_item" className="bg-slate-900">
-                            Dropped item
-                          </option>
-                          <option value="given_item" className="bg-slate-900">
-                            Given item
-                          </option>
-                        </select>
-                        <p className="text-xs text-foreground/50">Switch between on-floor drops and direct grants.</p>
-                      </div>
+                    <div className="grid gap-3 sm:grid-cols-4">
                       <div className="space-y-1">
                         <Label>Weight</Label>
                         <Input
@@ -803,175 +942,26 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                       </div>
                       <div className="space-y-1">
                         <Label>Replacement</Label>
-                        <select
-                          className="w-full rounded-md border border-white/10 bg-transparent px-3 py-2 text-sm"
+                        <Select
                           value={replacement}
-                          onChange={(event) =>
+                          onValueChange={(value) =>
                             handleEntryChange(entry.id, {
-                              replacementStrategy: event.target.value as ReplacementStrategy,
+                              replacementStrategy: value as ReplacementStrategy,
                             })
                           }
                         >
-                          {replacementStrategies.map((strategy) => (
-                            <option key={strategy} value={strategy} className="bg-slate-900">
-                              {strategy}
-                            </option>
-                          ))}
-                        </select>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {replacementStrategies.map((strategy) => (
+                              <SelectItem key={strategy} value={strategy}>
+                                {strategy}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <p className="text-xs text-foreground/50">Override the table replacement rule when needed.</p>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-col gap-3">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <CardTitle>Guaranteed loot</CardTitle>
-                  <CardDescription>
-                    Guaranteed entries always drop on top of the weighted pool and never repeat in this list.
-                  </CardDescription>
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <select
-                    className="w-full rounded-md border border-white/10 bg-transparent px-3 py-2 text-sm sm:w-48"
-                    value={selectedGuaranteedItemId}
-                    onChange={(event) => setSelectedGuaranteedItemId(event.target.value)}
-                    disabled={availableGuaranteedItems.length === 0}
-                  >
-                    {availableGuaranteedItems.length === 0 && <option className="bg-slate-900">No available items</option>}
-                    {availableGuaranteedItems.map((item) => (
-                      <option key={item.id} value={item.id} className="bg-slate-900">
-                        {item.name}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="w-full rounded-md border border-white/10 bg-transparent px-3 py-2 text-sm sm:w-44"
-                    value={selectedGuaranteedType}
-                    onChange={(event) => setSelectedGuaranteedType(event.target.value as LootEntry['type'])}
-                  >
-                    <option value="given_item" className="bg-slate-900">
-                      Given item
-                    </option>
-                    <option value="dropped_item" className="bg-slate-900">
-                      Dropped item
-                    </option>
-                  </select>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="gap-2"
-                    onClick={() => addLoot(selectedGuaranteedItemId, 'guaranteed', selectedGuaranteedType)}
-                    disabled={availableGuaranteedItems.length === 0 || !selectedGuaranteedItemId}
-                  >
-                    <Plus className="h-4 w-4" /> Add guaranteed loot
-                  </Button>
-                </div>
-              </div>
-              <p className="text-xs text-foreground/50">
-                Guaranteed loot fires after the weighted rolls and is ideal for quest rewards or pity items. Items are still unique across the whole table.
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {definition.guaranteed.length === 0 && (
-                <p className="rounded-xl border border-dashed border-white/10 bg-black/40 p-4 text-sm text-foreground/60">
-                  Add a given item to define guaranteed drops such as quest rewards.
-                </p>
-              )}
-              {definition.guaranteed.map((entry) => {
-                const item = items.find((itemRecord) => itemRecord.id === entry.itemId);
-                return (
-                  <div key={entry.id} className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/40 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-white">{item?.name ?? entry.itemId}</p>
-                        <p className="text-xs text-foreground/50">Guaranteed {entry.type === 'dropped_item' ? 'drop' : 'grant'}</p>
-                      </div>
-                      <Button type="button" variant="ghost" size="icon" onClick={() => removeEntry(entry.id, 'guaranteed')}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-5">
-                      <div className="space-y-1">
-                        <Label>Type</Label>
-                        <select
-                          className="w-full rounded-md border border-white/10 bg-transparent px-3 py-2 text-sm"
-                          value={entry.type}
-                          onChange={(event) =>
-                            handleGuaranteedChange(entry.id, {
-                              type: event.target.value as LootEntry['type'],
-                            })
-                          }
-                        >
-                          <option value="given_item" className="bg-slate-900">
-                            Given item
-                          </option>
-                          <option value="dropped_item" className="bg-slate-900">
-                            Dropped item
-                          </option>
-                        </select>
-                        <p className="text-xs text-foreground/50">Use given for direct grants or dropped for world spawns.</p>
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Weight</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={entry.weight}
-                          onChange={(event) =>
-                            handleGuaranteedChange(entry.id, { weight: Number(event.target.value) || 0 })
-                          }
-                          onBlur={autosave.handleBlur}
-                        />
-                        <p className="text-xs text-foreground/50">Weight is stored for export parity even though guarantees always trigger.</p>
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Min yield</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={entry.minYield}
-                          onChange={(event) =>
-                            handleGuaranteedChange(entry.id, { minYield: Number(event.target.value) || 0 })
-                          }
-                          onBlur={autosave.handleBlur}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Max yield</Label>
-                        <Input
-                          type="number"
-                          min={entry.minYield}
-                          value={entry.maxYield}
-                          onChange={(event) =>
-                            handleGuaranteedChange(entry.id, { maxYield: Number(event.target.value) || entry.maxYield })
-                          }
-                          onBlur={autosave.handleBlur}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Replacement</Label>
-                        <select
-                          className="w-full rounded-md border border-white/10 bg-transparent px-3 py-2 text-sm"
-                          value={entry.replacementStrategy}
-                          onChange={(event) =>
-                            handleGuaranteedChange(entry.id, {
-                              replacementStrategy: event.target.value as ReplacementStrategy,
-                            })
-                          }
-                        >
-                          {replacementStrategies.map((strategy) => (
-                            <option key={strategy} value={strategy} className="bg-slate-900">
-                              {strategy}
-                            </option>
-                          ))}
-                        </select>
-                        <p className="text-xs text-foreground/50">Guarantees rarely need overrides, but the option is here for parity.</p>
                       </div>
                     </div>
                   </div>
@@ -1009,9 +999,28 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
             </CardContent>
           </Card>
           <Card>
-            <CardHeader>
-              <CardTitle>JSON preview</CardTitle>
-              <CardDescription>Read-only export snapshot for parity checks.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div className="space-y-1">
+                <CardTitle>JSON preview</CardTitle>
+                <CardDescription>Read-only export snapshot for parity checks.</CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(JSON.stringify(definition, null, 2));
+                    setInfo('JSON copied to clipboard');
+                    setTimeout(() => setInfo(null), 2000);
+                  } catch (err) {
+                    console.error('Failed to copy:', err);
+                    setError('Failed to copy JSON');
+                  }
+                }}
+              >
+                <Copy className="h-4 w-4" />
+              </Button>
             </CardHeader>
             <CardContent>
               <JSONPreview data={definition} />
