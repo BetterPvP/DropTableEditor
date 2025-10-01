@@ -41,15 +41,33 @@ function getReplacement(entry: LootEntry, fallback: ReplacementStrategy) {
   return entry.replacementStrategy === 'UNSET' ? fallback : entry.replacementStrategy;
 }
 
+type Notification = {
+  id: string;
+  message: string;
+  type: 'success' | 'info' | 'error';
+};
+
 export function LootTableEditor({ tableId, definition: initialDefinition, metadata, items }: LootTableEditorProps) {
   const [definition, setDefinition] = useState<LootTableDefinition>(initialDefinition);
   const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isSaving, startSaving] = useTransition();
   const [selectedWeightedItemId, setSelectedWeightedItemId] = useState<string>('');
   const [selectedWeightedType, setSelectedWeightedType] = useState<LootEntry['type']>('dropped_item');
   const [selectedGuaranteedItemId, setSelectedGuaranteedItemId] = useState<string>('');
   const [selectedGuaranteedType, setSelectedGuaranteedType] = useState<LootEntry['type']>('given_item');
+
+  const addNotification = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
+    const id = Math.random().toString(36).slice(2);
+    setNotifications((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    }, 4000);
+  };
+
+  const removeNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
 
   const generateEntryId = () =>
     typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -140,7 +158,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
 
   const addLoot = (itemId: string, target: 'entries' | 'guaranteed', type: LootEntry['type']) => {
     if (!itemId) {
-      setInfo('Select an item to add.');
+      addNotification('Select an item to add.', 'info');
       return;
     }
     const item = items.find((candidate) => candidate.id === itemId);
@@ -168,7 +186,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
         [target]: ensureUniqueEntries([entry, ...existing]),
       };
     });
-    setInfo(`${type === 'dropped_item' ? 'Dropped' : 'Given'} item ${item.name} added. Adjust its values below.`);
+    addNotification(`${type === 'dropped_item' ? 'Dropped' : 'Given'} item ${item.name} added.`, 'success');
   };
 
   const removeEntry = (id: string, target: 'entries' | 'guaranteed') => {
@@ -190,7 +208,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
         version: prev.version,
         updated_at: new Date().toISOString(),
       }));
-      setInfo(`Imported ${parsed.name}. Review and save to persist.`);
+      addNotification(`Imported ${parsed.name}. Review and save to persist.`, 'success');
       setError(null);
     } catch (importError) {
       console.error(importError);
@@ -235,7 +253,20 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
               <Wand2 className="h-4 w-4" /> Run simulation
             </Link>
           </Button>
-          <Button type="button" variant="ghost" className="gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            className="gap-2"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(window.location.href);
+                addNotification('Link copied to clipboard', 'success');
+              } catch (err) {
+                console.error('Failed to copy:', err);
+                setError('Failed to copy link');
+              }
+            }}
+          >
             <Share2 className="h-4 w-4" /> Share link
           </Button>
           <Button type="button" variant="outline" className="gap-2" onClick={handleManualSave} disabled={isSaving}>
@@ -251,16 +282,9 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
         </div>
       </div>
 
-      {(error || info) && (
-        <div
-          className={cn(
-            'rounded-2xl border px-4 py-3 text-sm',
-            error
-              ? 'border-destructive/40 bg-destructive/10 text-destructive'
-              : 'border-primary/40 bg-primary/10 text-primary',
-          )}
-        >
-          {error ?? info}
+      {error && (
+        <div className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
         </div>
       )}
 
@@ -1012,8 +1036,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 onClick={async () => {
                   try {
                     await navigator.clipboard.writeText(JSON.stringify(definition, null, 2));
-                    setInfo('JSON copied to clipboard');
-                    setTimeout(() => setInfo(null), 2000);
+                    addNotification('JSON copied to clipboard', 'success');
                   } catch (err) {
                     console.error('Failed to copy:', err);
                     setError('Failed to copy JSON');
@@ -1028,6 +1051,36 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      {/* Notification Stack */}
+      <div className="fixed bottom-6 left-6 z-50 flex flex-col-reverse gap-3 max-w-md">
+        {notifications.map((notification, index) => (
+          <div
+            key={notification.id}
+            className={cn(
+              'rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur-sm transition-all duration-300 animate-in slide-in-from-bottom-2',
+              notification.type === 'success' &&
+                'border-green-500/40 bg-green-500/10 text-green-300',
+              notification.type === 'info' &&
+                'border-primary/40 bg-primary/10 text-primary',
+              notification.type === 'error' &&
+                'border-destructive/40 bg-destructive/10 text-destructive'
+            )}
+            style={{ animationDelay: `${index * 50}ms` }}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <span>{notification.message}</span>
+              <button
+                onClick={() => removeNotification(notification.id)}
+                className="text-foreground/40 hover:text-foreground/80 transition-colors"
+                aria-label="Dismiss"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
