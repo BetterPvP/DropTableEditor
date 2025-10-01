@@ -29,12 +29,28 @@
   @apply border-border;
 }
 
+html {
+  background-color: hsl(var(--background));
+}
+
 body {
   @apply bg-background text-foreground antialiased min-h-screen;
+  position: relative;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
   background-image: radial-gradient(circle at 20% 20%, rgba(98, 114, 164, 0.2), transparent 60%),
     radial-gradient(circle at 80% 0%, rgba(136, 84, 208, 0.18), transparent 55%),
     radial-gradient(circle at 50% 100%, rgba(32, 201, 151, 0.16), transparent 65%);
-  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: cover;
+  transform: translateZ(0);
 }
 
 .glass-panel {
