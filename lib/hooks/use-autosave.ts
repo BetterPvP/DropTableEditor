@@ -21,16 +21,28 @@ export function useAutosave<T>({ key, version, value, onSave, debounceMs = 1000 
   const intervalRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const draftKey = `${key}:v${version}`;
-    window.localStorage.setItem(draftKey, JSON.stringify(value));
     const lastSaved = lastSavedRef.current;
     if (lastSaved && lastSaved.version === version && lastSaved.value === value) {
       setDirty(false);
     } else {
       setDirty(true);
     }
-  }, [key, version, value]);
+  }, [version, value]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const draftKey = `${key}:v${version}`;
+    const timeout = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(draftKey, JSON.stringify(value));
+      } catch (storageError) {
+        console.error('Failed to persist autosave draft', storageError);
+      }
+    }, debounceMs);
+    return () => {
+      window.clearTimeout(timeout);
+    };
+  }, [debounceMs, key, value, version]);
 
   const performSave = useCallback(async () => {
     if (!dirty) return;
