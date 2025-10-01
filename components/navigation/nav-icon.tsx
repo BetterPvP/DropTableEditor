@@ -1,10 +1,12 @@
 import { cn } from '@/lib/utils';
-import { Home, Grid2x2, Settings, type LucideIcon } from 'lucide-react';
+import { Home, Grid2x2, Settings, UserCog, Package, type LucideIcon } from 'lucide-react';
 
 const ICON_MAP: Record<string, LucideIcon> = {
   home: Home,
   grid: Grid2x2,
   settings: Settings,
+  account: UserCog,
+  package: Package,
 };
 
 export function NavIcon({ name, className }: { name: string; className?: string }) {

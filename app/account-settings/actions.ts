@@ -8,10 +8,6 @@ const inviteSchema = z.object({
   code: z.string().optional(),
 });
 
-const itemSchema = z.object({
-  id: z.string().min(1),
-});
-
 function generateCode(prefix: string) {
   const random = Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
   return `${prefix}-${random}`;
@@ -61,35 +57,4 @@ export async function createInviteCodeAction(formData: FormData) {
   }
 
   return { ok: true, code } as const;
-}
-
-export async function registerItemAction(formData: FormData) {
-  const parsed = itemSchema.safeParse({
-    id: formData.get('id'),
-  });
-  if (!parsed.success) {
-    return { ok: false, error: 'Item ID is required' } as const;
-  }
-
-  const supabase = createServerSupabaseClient();
-  const { data: auth } = await supabase.auth.getUser();
-  const userId = auth.user?.id ?? null;
-
-  if (!userId) {
-    return { ok: false, error: 'Not authenticated' } as const;
-  }
-
-  const { error } = await supabase.from('items').insert({
-    id: parsed.data.id,
-    name: parsed.data.id,
-    description: null,
-    tags: null,
-  });
-
-  if (error) {
-    console.error('Failed to register item', error);
-    return { ok: false, error: 'Unable to register item. Ensure the ID is unique.' } as const;
-  }
-
-  return { ok: true } as const;
 }

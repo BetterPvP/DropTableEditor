@@ -54,7 +54,8 @@ Key routes:
 - `/loot-tables` – Searchable index
 - `/loot-tables/[id]` – Three-pane editor shell with autosave, inspector, and simulation drawer placeholder
 - `/loot-tables/new` – Draft creator experience using hybrid autosave
-- `/settings` – Account preferences stub
+- `/account-settings` – Account details and invite management
+- `/item-registry` – Item registration and maintenance
 
 ## Styling & Components
 - Tailwind CSS + CSS variables for glassmorphism

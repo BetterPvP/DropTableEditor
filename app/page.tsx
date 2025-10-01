@@ -35,7 +35,7 @@ export default function HomePage() {
                 </Link>
               </Button>
               <Button variant="outline" size="lg" className="gap-2" asChild>
-                <Link href="/settings">View Settings</Link>
+                <Link href="/account-settings">View Account Settings</Link>
               </Button>
             </div>
           </div>
