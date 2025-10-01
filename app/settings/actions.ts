@@ -10,9 +10,6 @@ const inviteSchema = z.object({
 
 const itemSchema = z.object({
   id: z.string().min(1),
-  name: z.string().min(1),
-  description: z.string().optional(),
-  tags: z.string().optional(),
 });
 
 function generateCode(prefix: string) {
@@ -65,27 +62,17 @@ export async function createInviteCodeAction(formData: FormData) {
 export async function registerItemAction(formData: FormData) {
   const parsed = itemSchema.safeParse({
     id: formData.get('id'),
-    name: formData.get('name'),
-    description: formData.get('description'),
-    tags: formData.get('tags'),
   });
   if (!parsed.success) {
-    return { ok: false, error: 'Item ID and name are required' } as const;
+    return { ok: false, error: 'Item ID is required' } as const;
   }
 
   const supabase = createServerSupabaseClient();
-  const tags = parsed.data.tags
-    ? parsed.data.tags
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter(Boolean)
-    : [];
-
   const { error } = await supabase.from('items').insert({
     id: parsed.data.id,
-    name: parsed.data.name,
-    description: parsed.data.description ?? null,
-    tags: tags.length > 0 ? tags : null,
+    name: parsed.data.id,
+    description: null,
+    tags: null,
   });
 
   if (error) {

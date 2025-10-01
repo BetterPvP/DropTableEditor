@@ -27,9 +27,6 @@ export function AccountSettings({ user, invites, items }: AccountSettingsProps) 
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [creatingInvite, startCreateInvite] = useTransition();
   const [itemId, setItemId] = useState('');
-  const [itemName, setItemName] = useState('');
-  const [itemDescription, setItemDescription] = useState('');
-  const [itemTags, setItemTags] = useState('');
   const [itemError, setItemError] = useState<string | null>(null);
   const [itemFeedback, setItemFeedback] = useState<string | null>(null);
   const [registeringItem, startRegisterItem] = useTransition();
@@ -63,9 +60,6 @@ export function AccountSettings({ user, invites, items }: AccountSettingsProps) 
     setItemFeedback(null);
     const formData = new FormData();
     formData.append('id', itemId.trim());
-    formData.append('name', itemName.trim());
-    if (itemDescription.trim()) formData.append('description', itemDescription.trim());
-    if (itemTags.trim()) formData.append('tags', itemTags.trim());
 
     startRegisterItem(async () => {
       const response = await registerItemAction(formData);
@@ -75,9 +69,6 @@ export function AccountSettings({ user, invites, items }: AccountSettingsProps) 
       }
       setItemFeedback(`Item ${itemId.trim()} registered.`);
       setItemId('');
-      setItemName('');
-      setItemDescription('');
-      setItemTags('');
       router.refresh();
     });
   };
@@ -213,34 +204,9 @@ export function AccountSettings({ user, invites, items }: AccountSettingsProps) 
                 placeholder="minecraft:diamond"
                 required
               />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="item-name">Name</Label>
-              <Input
-                id="item-name"
-                value={itemName}
-                onChange={(event) => setItemName(event.target.value)}
-                placeholder="Diamond"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="item-description">Description</Label>
-              <Input
-                id="item-description"
-                value={itemDescription}
-                onChange={(event) => setItemDescription(event.target.value)}
-                placeholder="Optional notes"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="item-tags">Tags</Label>
-              <Input
-                id="item-tags"
-                value={itemTags}
-                onChange={(event) => setItemTags(event.target.value)}
-                placeholder="comma,separated,tags"
-              />
+              <p className="text-xs text-foreground/50">
+                Only the canonical item identifier is stored. Display metadata is resolved in-game.
+              </p>
             </div>
             <Button type="submit" disabled={registeringItem}>
               {registeringItem ? 'Registering…' : 'Register item'}
@@ -253,14 +219,13 @@ export function AccountSettings({ user, invites, items }: AccountSettingsProps) 
               <thead className="sticky top-0 bg-black/60 text-xs uppercase tracking-wide text-foreground/60">
                 <tr>
                   <th className="px-4 py-2 text-left">ID</th>
-                  <th className="px-4 py-2 text-left">Name</th>
-                  <th className="px-4 py-2 text-left">Tags</th>
+                  <th className="px-4 py-2 text-left">Registered</th>
                 </tr>
               </thead>
               <tbody>
                 {items.length === 0 && (
                   <tr>
-                    <td className="px-4 py-4 text-center text-foreground/50" colSpan={3}>
+                    <td className="px-4 py-4 text-center text-foreground/50" colSpan={2}>
                       No items registered yet. Add at least one to start building loot tables.
                     </td>
                   </tr>
@@ -268,8 +233,9 @@ export function AccountSettings({ user, invites, items }: AccountSettingsProps) 
                 {items.map((item) => (
                   <tr key={item.id} className="border-b border-white/5">
                     <td className="px-4 py-2 font-mono text-xs">{item.id}</td>
-                    <td className="px-4 py-2">{item.name}</td>
-                    <td className="px-4 py-2 text-xs text-foreground/60">{item.tags?.join(', ') ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs text-foreground/60">
+                      Added {new Date(item.created_at).toLocaleString()}
+                    </td>
                   </tr>
                 ))}
               </tbody>
