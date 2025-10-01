@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
 import { Database } from './supabase/types';
 
-const PUBLIC_PATHS = ['/', '/auth/sign-in', '/auth/sign-up'];
+const PUBLIC_PATHS = ['/auth/sign-in', '/auth/sign-up'];
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next();

@@ -53,15 +53,6 @@ export default async function LootTableEditorPage({ params }: LootTableEditorPag
       };
 
   const { data: itemsData } = await supabase.from('items').select('*').order('name');
-  const { data: openTabsData } = await supabase
-    .from('loot_tables')
-    .select('id, name, version')
-    .order('updated_at', { ascending: false })
-    .limit(8);
-  const openTabs = [...(openTabsData ?? [])];
-  if (!openTabs.some((tab) => tab.id === table.id)) {
-    openTabs.unshift({ id: table.id, name: table.name, version: table.version });
-  }
 
   return (
     <LootTableEditor
@@ -69,7 +60,6 @@ export default async function LootTableEditorPage({ params }: LootTableEditorPag
       definition={{ ...definition, version: table.version, updated_at: table.updated_at }}
       metadata={typeof table.metadata === 'object' ? (table.metadata as Record<string, unknown>) : null}
       items={itemsData ?? []}
-      openTabs={openTabs.map((tab) => ({ id: tab.id, name: tab.name, version: tab.version }))}
     />
   );
 }
