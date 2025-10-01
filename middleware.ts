@@ -1,39 +1,57 @@
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { Database } from './supabase/types';
+
+const PUBLIC_PATHS = ['/auth/sign-in', '/auth/sign-up'];
 
 export async function middleware(request: NextRequest) {
-  const response = NextResponse.next({
-    request,
-  })
+  const response = NextResponse.next();
+  const { pathname, search } = request.nextUrl;
 
-  // Check for Supabase session cookies
-  const accessToken = request.cookies.get('sb-access-token')?.value
-  const refreshToken = request.cookies.get('sb-refresh-token')?.value
-
-  // Alternative cookie names (Supabase uses different formats)
-  const hasSupabaseCookie = request.cookies.getAll().some(cookie =>
-    cookie.name.includes('sb-') && cookie.name.includes('auth-token')
-  )
-
-  const isAuthenticated = !!(accessToken || refreshToken || hasSupabaseCookie)
-
-  // Protected routes - redirect to sign-in if not authenticated
-  if (!isAuthenticated && !request.nextUrl.pathname.startsWith('/auth')) {
-    const redirectUrl = request.nextUrl.clone()
-    redirectUrl.pathname = '/auth/sign-in'
-    redirectUrl.searchParams.set('redirectTo', request.nextUrl.pathname)
-    return NextResponse.redirect(redirectUrl)
+  if (pathname.startsWith('/_next') || pathname.startsWith('/api') || pathname.startsWith('/favicon')) {
+    return response;
   }
 
-  // Redirect authenticated users away from auth pages
-  if (isAuthenticated && request.nextUrl.pathname.startsWith('/auth/sign-')) {
-    return NextResponse.redirect(new URL('/loot-tables', request.url))
+  const supabase = createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value));
+          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+        },
+      },
+    }
+  );
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  const isAuthRoute = pathname.startsWith('/auth');
+  const isPublicRoute = PUBLIC_PATHS.includes(pathname);
+
+  if (!session && !isPublicRoute && !isAuthRoute) {
+    const redirectUrl = new URL('/auth/sign-in', request.url);
+    if (pathname !== '/') {
+      redirectUrl.searchParams.set('redirectTo', `${pathname}${search}`);
+    }
+    return NextResponse.redirect(redirectUrl);
   }
 
-  return response
+  if (session && isAuthRoute) {
+    const redirectUrl = new URL('/loot-tables', request.url);
+    return NextResponse.redirect(redirectUrl);
+  }
+
+  return response;
 }
 
 export const config = {
-  matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
-}
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+};
