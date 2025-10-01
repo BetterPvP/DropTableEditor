@@ -2,6 +2,7 @@
 
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useTransition } from 'react';
+import Link from 'next/link';
 import { Copy, Download, Plus, Share2, Trash2, Upload, Wand2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,7 +13,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SaveIndicator } from '@/components/save-indicator';
 import { JSONPreview } from './json-preview';
-import { SimulationDrawer } from '@/components/simulation/simulation-drawer';
 import {
   LootEntry,
   LootTableDefinition,
@@ -45,7 +45,6 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
   const [definition, setDefinition] = useState<LootTableDefinition>(initialDefinition);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [simulationOpen, setSimulationOpen] = useState(false);
   const [isSaving, startSaving] = useTransition();
   const [selectedWeightedItemId, setSelectedWeightedItemId] = useState<string>('');
   const [selectedWeightedType, setSelectedWeightedType] = useState<LootEntry['type']>('dropped_item');
@@ -231,8 +230,10 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <SaveIndicator status={isSaving ? 'saving' : autosave.status} />
-          <Button type="button" variant="outline" className="gap-2" onClick={() => setSimulationOpen(true)}>
-            <Wand2 className="h-4 w-4" /> Run simulation
+          <Button type="button" variant="outline" className="gap-2" asChild>
+            <Link href={`/loot-tables/${tableId}/simulate`}>
+              <Wand2 className="h-4 w-4" /> Run simulation
+            </Link>
           </Button>
           <Button type="button" variant="ghost" className="gap-2">
             <Share2 className="h-4 w-4" /> Share link
@@ -1028,14 +1029,6 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
           </Card>
         </div>
       </div>
-
-      <SimulationDrawer
-        open={simulationOpen}
-        onClose={() => setSimulationOpen(false)}
-        definition={definition}
-        probabilities={probabilities}
-        items={items}
-      />
     </div>
   );
 }
