@@ -5,6 +5,8 @@ import { ArrowLeft } from 'lucide-react';
 import { createServerSupabaseClient } from '@/supabase/server';
 import { SimulationWorkspace } from '@/components/simulation/simulation-workspace';
 import { computeWeightTotals, lootTableDefinitionSchema } from '@/lib/loot-tables/types';
+import { fetchAllItems } from '@/lib/items/queries';
+import type { ItemRow } from '@/lib/items/queries';
 
 interface SimulationPageProps {
   params: { id: string };
@@ -55,7 +57,13 @@ export default async function LootTableSimulationPage({ params }: SimulationPage
         updated_at: table.updated_at,
       };
 
-  const { data: itemsData } = await supabase.from('items').select('*').order('name');
+  let itemsData: ItemRow[] = [];
+  try {
+    itemsData = await fetchAllItems(supabase, { orderBy: 'name', ascending: true });
+  } catch (itemsError) {
+    console.error('Failed to load items for simulation', itemsError);
+  }
+
   const { probabilities } = computeWeightTotals(definition.entries);
 
   return (
@@ -74,7 +82,7 @@ export default async function LootTableSimulationPage({ params }: SimulationPage
           <ArrowLeft className="h-4 w-4" /> Back to editor
         </Link>
       </div>
-      <SimulationWorkspace definition={definition} probabilities={probabilities} items={itemsData ?? []} />
+      <SimulationWorkspace definition={definition} probabilities={probabilities} items={itemsData} />
     </div>
   );
 }

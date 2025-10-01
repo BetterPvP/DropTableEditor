@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/supabase/server';
 import { LootTableEditor } from '@/components/editor/loot-table-editor';
 import { lootTableDefinitionSchema } from '@/lib/loot-tables/types';
+import { fetchAllItems } from '@/lib/items/queries';
+import type { ItemRow } from '@/lib/items/queries';
 
 interface LootTableEditorPageProps {
   params: { id: string };
@@ -52,14 +54,19 @@ export default async function LootTableEditorPage({ params }: LootTableEditorPag
         updated_at: table.updated_at,
       };
 
-  const { data: itemsData } = await supabase.from('items').select('*').order('name');
+  let itemsData: ItemRow[] = [];
+  try {
+    itemsData = await fetchAllItems(supabase, { orderBy: 'name', ascending: true });
+  } catch (itemsError) {
+    console.error('Failed to load items for editor', itemsError);
+  }
 
   return (
     <LootTableEditor
       tableId={table.id}
       definition={{ ...definition, version: table.version, updated_at: table.updated_at }}
       metadata={typeof table.metadata === 'object' ? (table.metadata as Record<string, unknown>) : null}
-      items={itemsData ?? []}
+      items={itemsData}
     />
   );
 }
