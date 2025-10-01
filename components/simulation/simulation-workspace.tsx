@@ -10,7 +10,11 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LootTableDefinition, SimulationResult } from '@/lib/loot-tables/types';
+import {
+  LootTableDefinition,
+  SimulationResult,
+  SimulationTimelineEventType,
+} from '@/lib/loot-tables/types';
 import type { Database } from '@/supabase/types';
 
 interface SimulationWorkspaceProps {
@@ -40,10 +44,11 @@ const sortLabels: Record<SortOption, string> = {
   name: 'Alphabetical',
 };
 
-const timelineColors: Record<'appeared' | 'rolled' | 'consumed', string> = {
+const timelineColors: Record<SimulationTimelineEventType, string> = {
   appeared: 'bg-sky-400',
   rolled: 'bg-emerald-400',
   consumed: 'bg-rose-500',
+  granted: 'bg-amber-400',
 };
 
 const probabilityColors = ['#22d3ee', '#1f2937'];
@@ -57,6 +62,7 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
   const [error, setError] = useState<string | null>(null);
   const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('yielded');
+  const [timelineView, setTimelineView] = useState<'roll' | 'run'>('roll');
   const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
@@ -67,6 +73,10 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
       }
     };
   }, []);
+
+  useEffect(() => {
+    setTimelineView('roll');
+  }, [selectedEntry]);
 
   const handleRun = () => {
     if (runs <= 0) {
@@ -150,6 +160,46 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
     if (!selectedEntry) return null;
     return tableRows.find((entry) => entry.entryId === selectedEntry) ?? null;
   }, [selectedEntry, tableRows]);
+
+  const rollTimelineEvents = useMemo(() => {
+    if (!selectedRow) return [];
+    return selectedRow.timeline.filter((event) => event.type !== 'granted');
+  }, [selectedRow]);
+
+  const runTimelineEvents = useMemo(() => {
+    if (!selectedRow) return [];
+    const summaries = new Map<
+      number,
+      {
+        run: number;
+        rolled: boolean;
+        granted: boolean;
+        rolledQuantity: number;
+        grantedQuantity: number;
+      }
+    >();
+    for (const event of selectedRow.timeline) {
+      if (event.type !== 'rolled' && event.type !== 'granted') continue;
+      const entry =
+        summaries.get(event.run) ?? {
+          run: event.run,
+          rolled: false,
+          granted: false,
+          rolledQuantity: 0,
+          grantedQuantity: 0,
+        };
+      if (event.type === 'rolled') {
+        entry.rolled = true;
+        entry.rolledQuantity += event.quantity ?? 0;
+      }
+      if (event.type === 'granted') {
+        entry.granted = true;
+        entry.grantedQuantity += event.quantity ?? 0;
+      }
+      summaries.set(event.run, entry);
+    }
+    return Array.from(summaries.values()).sort((a, b) => a.run - b.run);
+  }, [selectedRow]);
 
   return (
     <div className="space-y-6">
@@ -314,7 +364,13 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
                     onClick={() => setSelectedEntry(selectedEntry === entry.entryId ? null : entry.entryId)}
                   >
                     <td className="px-3 py-2">{entry.name}</td>
-                    <td className="px-3 py-2 text-right text-xs">{entry.type === 'dropped_item' ? 'Drop' : 'Give'}</td>
+                    <td className="px-3 py-2 text-right text-xs">
+                      {entry.source === 'guaranteed'
+                        ? 'Guaranteed'
+                        : entry.type === 'dropped_item'
+                          ? 'Drop'
+                          : 'Give'}
+                    </td>
                     <td className="px-3 py-2 text-right">{entry.totalDrops.toLocaleString()}</td>
                     <td className="px-3 py-2 text-right">{entry.perRunAverage.toFixed(2)}</td>
                     <td className="px-3 py-2 text-right">{entry.rollHits.toLocaleString()}</td>
@@ -335,7 +391,13 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
               <div className="grid gap-3 md:grid-cols-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-foreground/60">Entry Type:</span>
-                  <span className="text-foreground/90">{selectedRow.type === 'dropped_item' ? 'Dropped Item' : 'Given Item'}</span>
+                  <span className="text-foreground/90">
+                    {selectedRow.source === 'guaranteed'
+                      ? `Guaranteed ${selectedRow.type === 'dropped_item' ? 'Drop' : 'Give'}`
+                      : selectedRow.type === 'dropped_item'
+                        ? 'Dropped Item'
+                        : 'Given Item'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-foreground/60">Total Yield:</span>
@@ -360,9 +422,21 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-foreground/60">First Appearance:</span>
+                  <span className="text-foreground/60">First Run Appearance:</span>
                   <span className="text-foreground/90">
-                    {selectedRow.firstAppearedAt ? `Roll #${selectedRow.firstAppearedAt}` : 'Never appeared'}
+                    {selectedRow.firstRunAppearance
+                      ? `Run #${selectedRow.firstRunAppearance}`
+                      : 'Never appeared'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-foreground/60">First Roll Appearance:</span>
+                  <span className="text-foreground/90">
+                    {selectedRow.firstAppearedAt
+                      ? `Roll #${selectedRow.firstAppearedAt}`
+                      : selectedRow.source === 'guaranteed'
+                        ? 'Not rolled'
+                        : 'Never appeared'}
                   </span>
                 </div>
                 <div className="flex justify-between">
@@ -376,37 +450,123 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
               </div>
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
                 <div className="rounded-xl border border-white/10 bg-black/40 p-4">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Timeline</h4>
-                  {selectedRow.timeline.length === 0 ? (
-                    <p className="mt-3 text-sm text-foreground/60">This entry never appeared during the simulation.</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Timeline</h4>
+                    <div className="inline-flex gap-2 rounded-lg border border-white/10 bg-black/40 p-1">
+                      <Button
+                        type="button"
+                        variant={timelineView === 'roll' ? 'default' : 'ghost'}
+                        size="sm"
+                        className="h-8 px-3 text-xs"
+                        onClick={() => setTimelineView('roll')}
+                      >
+                        Roll timeline
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={timelineView === 'run' ? 'default' : 'ghost'}
+                        size="sm"
+                        className="h-8 px-3 text-xs"
+                        onClick={() => setTimelineView('run')}
+                      >
+                        Run timeline
+                      </Button>
+                    </div>
+                  </div>
+                  {timelineView === 'roll' ? (
+                    rollTimelineEvents.length === 0 ? (
+                      <p className="mt-3 text-sm text-foreground/60">No roll events recorded for this entry.</p>
+                    ) : (
+                      <div className="mt-4">
+                        <div className="relative h-24">
+                          <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-white/20" />
+                          {(() => {
+                            const maxRoll = Math.max(...rollTimelineEvents.map((event) => event.rollIndex));
+                            return rollTimelineEvents.map((event, index) => {
+                              const percent = maxRoll <= 1 ? 0 : ((event.rollIndex - 1) / (maxRoll - 1)) * 100;
+                              const tooltipLabel = [
+                                event.type === 'rolled'
+                                  ? `Rolled x${event.quantity ?? 1}`
+                                  : event.type === 'appeared'
+                                    ? 'Appeared'
+                                    : 'Consumed',
+                                `Roll #${event.rollIndex}`,
+                                `Run #${event.run + 1}`,
+                              ].join(' · ');
+                              return (
+                                <div
+                                  key={`${event.type}-${index}-${event.rollIndex}`}
+                                  className="absolute flex -translate-x-1/2 flex-col items-center text-[10px] text-foreground/70"
+                                  style={{ left: `${percent}%` }}
+                                >
+                                  <span
+                                    className={`h-4 w-4 rounded-full border border-white/40 ${timelineColors[event.type]}`}
+                                    title={tooltipLabel}
+                                  />
+                                  <span className="mt-1">#{event.rollIndex}</span>
+                                </div>
+                              );
+                            });
+                          })()}
+                        </div>
+                        <div className="mt-4 flex flex-wrap gap-3 text-[10px] uppercase tracking-wide text-foreground/50">
+                          {(() => {
+                            const types = new Set(rollTimelineEvents.map((event) => event.type));
+                            return (
+                              <>
+                                {types.has('appeared') && (
+                                  <span className="flex items-center gap-1">
+                                    <span className="h-2 w-2 rounded-full bg-sky-400" /> Appeared
+                                  </span>
+                                )}
+                                {types.has('rolled') && (
+                                  <span className="flex items-center gap-1">
+                                    <span className="h-2 w-2 rounded-full bg-emerald-400" /> Rolled
+                                  </span>
+                                )}
+                                {types.has('consumed') && (
+                                  <span className="flex items-center gap-1">
+                                    <span className="h-2 w-2 rounded-full bg-rose-500" /> Consumed
+                                  </span>
+                                )}
+                              </>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    )
+                  ) : runTimelineEvents.length === 0 ? (
+                    <p className="mt-3 text-sm text-foreground/60">This entry never appeared in any run.</p>
                   ) : (
                     <div className="mt-4">
                       <div className="relative h-24">
                         <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-white/20" />
                         {(() => {
-                          const maxRoll = Math.max(...selectedRow.timeline.map((event) => event.rollIndex));
-                          return selectedRow.timeline.map((event, index) => {
-                            const percent = maxRoll <= 1 ? 0 : ((event.rollIndex - 1) / (maxRoll - 1)) * 100;
-                            const tooltipLabel = [
-                              event.type === 'rolled'
-                                ? `Rolled x${event.quantity ?? 1}`
-                                : event.type === 'appeared'
-                                  ? 'Appeared'
-                                  : 'Consumed',
-                              `Roll #${event.rollIndex}`,
+                          const totalRuns = result?.runs ?? 0;
+                          const denominator = Math.max(totalRuns - 1, 1);
+                          return runTimelineEvents.map((event, index) => {
+                            const percent = totalRuns <= 1 ? 0 : (event.run / denominator) * 100;
+                            const labels = [
+                              event.rolled
+                                ? `Rolled${event.rolledQuantity ? ` x${event.rolledQuantity}` : ''}`
+                                : null,
+                              event.granted
+                                ? `Guaranteed${event.grantedQuantity ? ` x${event.grantedQuantity}` : ''}`
+                                : null,
                               `Run #${event.run + 1}`,
-                            ].join(' · ');
+                            ].filter(Boolean) as string[];
+                            const colorKey: SimulationTimelineEventType = event.rolled ? 'rolled' : 'granted';
                             return (
                               <div
-                                key={`${event.type}-${index}-${event.rollIndex}`}
+                                key={`run-${event.run}-${index}`}
                                 className="absolute flex -translate-x-1/2 flex-col items-center text-[10px] text-foreground/70"
                                 style={{ left: `${percent}%` }}
                               >
                                 <span
-                                  className={`h-4 w-4 rounded-full border border-white/40 ${timelineColors[event.type]}`}
-                                  title={tooltipLabel}
+                                  className={`h-4 w-4 rounded-full border border-white/40 ${timelineColors[colorKey]}`}
+                                  title={labels.join(' · ')}
                                 />
-                                <span className="mt-1">#{event.rollIndex}</span>
+                                <span className="mt-1">#{event.run + 1}</span>
                               </div>
                             );
                           });
@@ -414,14 +574,13 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
                       </div>
                       <div className="mt-4 flex flex-wrap gap-3 text-[10px] uppercase tracking-wide text-foreground/50">
                         <span className="flex items-center gap-1">
-                          <span className="h-2 w-2 rounded-full bg-sky-400" /> Appeared
+                          <span className="h-2 w-2 rounded-full bg-emerald-400" /> Rolled Run
                         </span>
-                        <span className="flex items-center gap-1">
-                          <span className="h-2 w-2 rounded-full bg-emerald-400" /> Rolled
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <span className="h-2 w-2 rounded-full bg-rose-500" /> Consumed
-                        </span>
+                        {runTimelineEvents.some((event) => event.granted) && (
+                          <span className="flex items-center gap-1">
+                            <span className="h-2 w-2 rounded-full bg-amber-400" /> Guaranteed Run
+                          </span>
+                        )}
                       </div>
                     </div>
                   )}

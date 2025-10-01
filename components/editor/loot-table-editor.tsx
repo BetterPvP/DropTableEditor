@@ -805,6 +805,22 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                             onBlur={autosave.handleBlur}
                           />
                         </div>
+                        <div className="sm:col-span-3 flex justify-end pt-1">
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            className="w-full sm:w-auto"
+                            onClick={() =>
+                              setDefinition((prev) => ({
+                                ...prev,
+                                pityRules: prev.pityRules.filter((_, i) => i !== index),
+                              }))
+                            }
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" /> Remove rule
+                          </Button>
+                        </div>
                       </div>
                     ))}
                     <Button

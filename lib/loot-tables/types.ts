@@ -81,7 +81,7 @@ export const lootTableDefinitionSchema = z.object({
 
 export type LootTableDefinition = z.infer<typeof lootTableDefinitionSchema>;
 
-export type SimulationTimelineEventType = 'appeared' | 'rolled' | 'consumed';
+export type SimulationTimelineEventType = 'appeared' | 'rolled' | 'consumed' | 'granted';
 
 export interface SimulationTimelineEvent {
   rollIndex: number;
@@ -89,6 +89,8 @@ export interface SimulationTimelineEvent {
   type: SimulationTimelineEventType;
   quantity?: number;
 }
+
+export type SimulationResultEntrySource = 'weighted' | 'guaranteed';
 
 export interface SimulationResultEntry {
   entryId: string;
@@ -98,11 +100,13 @@ export interface SimulationResultEntry {
   maxYield: number;
   itemId: string;
   firstAppearedAt: number | null;
+  firstRunAppearance: number | null;
   probability: number;
   perRunAverage: number;
   rollHits: number;
   bundleHits: number;
   timeline: SimulationTimelineEvent[];
+  source: SimulationResultEntrySource;
 }
 
 export interface SimulationResult {
