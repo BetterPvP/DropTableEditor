@@ -1,9 +1,9 @@
 'use client';
 
-import { ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useTransition } from 'react';
 import Link from 'next/link';
-import { Copy, Download, Plus, Share2, Trash2, Upload, Wand2 } from 'lucide-react';
+import { ChevronsUpDown, Copy, Download, Plus, Share2, Trash2, Upload, Wand2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -48,6 +48,142 @@ type Notification = {
   message: string;
   type: 'success' | 'info' | 'error';
 };
+
+interface ItemComboboxProps {
+  items: Database['public']['Tables']['items']['Row'][];
+  value: string;
+  onSelect: (itemId: string) => void;
+  placeholder: string;
+  disabled?: boolean;
+  className?: string;
+}
+
+function ItemCombobox({ items, value, onSelect, placeholder, disabled, className }: ItemComboboxProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const selectedItem = useMemo(
+    () => items.find((item) => item.id === value) ?? null,
+    [items, value],
+  );
+
+  const filteredItems = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) {
+      return items;
+    }
+    return items.filter((item) => {
+      const id = item.id.toLowerCase();
+      const name = (item.name ?? '').toLowerCase();
+      return id.includes(normalized) || name.includes(normalized);
+    });
+  }, [items, query]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const handleClick = (event: MouseEvent) => {
+      if (!containerRef.current) {
+        return;
+      }
+      if (!containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) {
+      setQuery('');
+      return;
+    }
+    const nextValue = selectedItem ? selectedItem.name ?? selectedItem.id : '';
+    setQuery(nextValue);
+    requestAnimationFrame(() => {
+      inputRef.current?.select();
+    });
+  }, [open, selectedItem]);
+
+  const handleSelect = (itemId: string) => {
+    onSelect(itemId);
+    setOpen(false);
+  };
+
+  return (
+    <div className={cn('relative', className)} ref={containerRef}>
+      <button
+        type="button"
+        className={cn(
+          'flex w-full items-center justify-between rounded-md border border-white/10 bg-white/5 px-3 py-2 text-left text-sm shadow-sm transition-colors placeholder:text-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+          disabled ? 'cursor-not-allowed opacity-50' : 'hover:border-primary/50 hover:bg-primary/10',
+          className
+        )}
+        onClick={() => {
+          if (!disabled) {
+            setOpen((prev) => !prev);
+          }
+        }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        disabled={disabled}
+      >
+        <span className={selectedItem ? 'text-white' : 'text-foreground/60'}>
+          {selectedItem ? selectedItem.name ?? selectedItem.id : placeholder}
+        </span>
+        <ChevronsUpDown className="h-4 w-4 text-foreground/50" />
+      </button>
+      {open && (
+        <div className="absolute left-0 z-30 mt-2 w-full min-w-[16rem] rounded-xl border border-white/10 bg-slate-950/95 p-2 shadow-xl backdrop-blur">
+          <Input
+            autoFocus
+            ref={inputRef}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search items..."
+            className="mb-2"
+          />
+          <div className="max-h-60 space-y-1 overflow-y-auto">
+            {filteredItems.length === 0 ? (
+              <p className="px-2 py-4 text-sm text-foreground/60">No items match your search.</p>
+            ) : (
+              filteredItems.map((item) => {
+                const isSelected = item.id === value;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={cn(
+                      'flex w-full flex-col items-start rounded-lg px-3 py-2 text-left text-sm transition hover:bg-primary/10',
+                      isSelected ? 'bg-primary/20 text-white' : 'text-foreground',
+                    )}
+                    onClick={() => handleSelect(item.id)}
+                  >
+                    <span className="font-medium text-white">{item.name ?? item.id}</span>
+                    <span className="text-xs text-foreground/60">{item.id}</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function LootTableEditor({ tableId, definition: initialDefinition, metadata, items }: LootTableEditorProps) {
   const router = useRouter();
@@ -787,22 +923,18 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                   </CardDescription>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <Select
+                  <ItemCombobox
+                    className="sm:w-64"
+                    items={availableGuaranteedItems}
                     value={selectedGuaranteedItemId}
-                    onValueChange={setSelectedGuaranteedItemId}
+                    onSelect={setSelectedGuaranteedItemId}
                     disabled={availableGuaranteedItems.length === 0}
-                  >
-                    <SelectTrigger className="sm:w-48">
-                      <SelectValue placeholder={availableGuaranteedItems.length === 0 ? "No available items" : "Select item"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableGuaranteedItems.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder={
+                      availableGuaranteedItems.length === 0
+                        ? 'No available items'
+                        : 'Search or select item'
+                    }
+                  />
                   <Select
                     value={selectedGuaranteedType}
                     onValueChange={(value) => setSelectedGuaranteedType(value as LootEntry['type'])}
@@ -932,22 +1064,18 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                   </CardDescription>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <Select
+                  <ItemCombobox
+                    className="sm:w-64"
+                    items={availableWeightedItems}
                     value={selectedWeightedItemId}
-                    onValueChange={setSelectedWeightedItemId}
+                    onSelect={setSelectedWeightedItemId}
                     disabled={availableWeightedItems.length === 0}
-                  >
-                    <SelectTrigger className="sm:w-48">
-                      <SelectValue placeholder={availableWeightedItems.length === 0 ? "No available items" : "Select item"} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableWeightedItems.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder={
+                      availableWeightedItems.length === 0
+                        ? 'No available items'
+                        : 'Search or select item'
+                    }
+                  />
                   <Select
                     value={selectedWeightedType}
                     onValueChange={(value) => setSelectedWeightedType(value as LootEntry['type'])}

@@ -77,7 +77,7 @@ create policy "Items update by authenticated" on public.items
 
 drop policy if exists "Loot tables readable by authenticated" on public.loot_tables;
 create policy "Loot tables readable by authenticated" on public.loot_tables
-  for select using (auth.role() = 'authenticated');
+  for select using (auth.role() = ' authenticated');
 
 drop policy if exists "Loot tables insert by authenticated" on public.loot_tables;
 create policy "Loot tables insert by authenticated" on public.loot_tables
