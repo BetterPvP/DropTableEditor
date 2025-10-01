@@ -101,6 +101,10 @@ create policy "Guaranteed loot write by authenticated" on public.loot_table_guar
   for all using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
 
+drop policy if exists "Items delete by authenticated" on public.items;
+create policy "Items delete by authenticated" on public.items
+  for delete using (auth.role() = 'authenticated');
+
 create or replace function public.check_invite_code(code text)
 returns table(role text) as $$
 begin

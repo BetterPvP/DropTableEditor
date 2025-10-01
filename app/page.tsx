@@ -10,6 +10,12 @@ const tools = [
     href: '/loot-tables',
     icon: Workflow,
   },
+  {
+    name: 'Item Registry',
+    description: 'Manage the registered items available for this sites',
+    href: '/item-registry',
+    icon: Rocket,
+  }
 ];
 
 export default function HomePage() {

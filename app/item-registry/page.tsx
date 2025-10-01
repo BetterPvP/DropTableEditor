@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { ItemRegistry } from '@/components/settings/item-registry';
+import { ItemRegistry } from '@/components/items/registry';
 import { createServerSupabaseClient } from '@/supabase/server';
 
 export const metadata: Metadata = {
