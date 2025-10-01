@@ -61,6 +61,10 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
   const [selectedWeightedType, setSelectedWeightedType] = useState<LootEntry['type']>('dropped_item');
   const [selectedGuaranteedItemId, setSelectedGuaranteedItemId] = useState<string>('');
   const [selectedGuaranteedType, setSelectedGuaranteedType] = useState<LootEntry['type']>('given_item');
+  const [isGuaranteedPickerOpen, setIsGuaranteedPickerOpen] = useState(false);
+  const [guaranteedSearch, setGuaranteedSearch] = useState('');
+  const [isWeightedPickerOpen, setIsWeightedPickerOpen] = useState(false);
+  const [weightedSearch, setWeightedSearch] = useState('');
 
   const addNotification = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
     const id = Math.random().toString(36).slice(2);
@@ -93,6 +97,28 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
     const takenIds = new Set(definition.guaranteed.map((entry) => entry.itemId));
     return items.filter((item) => !takenIds.has(item.id));
   }, [definition.guaranteed, items]);
+
+  const filteredGuaranteedItems = useMemo(() => {
+    const query = guaranteedSearch.trim().toLowerCase();
+    if (!query) {
+      return availableGuaranteedItems;
+    }
+    return availableGuaranteedItems.filter((item) => {
+      const haystack = `${item.name ?? ''} ${item.id} ${item.description ?? ''}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [availableGuaranteedItems, guaranteedSearch]);
+
+  const filteredWeightedItems = useMemo(() => {
+    const query = weightedSearch.trim().toLowerCase();
+    if (!query) {
+      return availableWeightedItems;
+    }
+    return availableWeightedItems.filter((item) => {
+      const haystack = `${item.name ?? ''} ${item.id} ${item.description ?? ''}`.toLowerCase();
+      return haystack.includes(query);
+    });
+  }, [availableWeightedItems, weightedSearch]);
 
   const autosave = useAutosave({
     key: `loot-table:${tableId}`,
@@ -788,6 +814,13 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <Select
+                    open={isGuaranteedPickerOpen}
+                    onOpenChange={(open) => {
+                      setIsGuaranteedPickerOpen(open);
+                      if (!open) {
+                        setGuaranteedSearch('');
+                      }
+                    }}
                     value={selectedGuaranteedItemId}
                     onValueChange={setSelectedGuaranteedItemId}
                     disabled={availableGuaranteedItems.length === 0}
@@ -796,11 +829,28 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                       <SelectValue placeholder={availableGuaranteedItems.length === 0 ? "No available items" : "Select item"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableGuaranteedItems.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name}
-                        </SelectItem>
-                      ))}
+                      <div
+                        className="sticky top-0 z-10 bg-popover p-2"
+                        onPointerDown={(event) => event.stopPropagation()}
+                      >
+                        <Input
+                          autoFocus
+                          value={guaranteedSearch}
+                          onChange={(event) => setGuaranteedSearch(event.target.value)}
+                          placeholder="Search items..."
+                          className="h-8"
+                          onKeyDown={(event) => event.stopPropagation()}
+                        />
+                      </div>
+                      {filteredGuaranteedItems.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-foreground/60">No items found.</div>
+                      ) : (
+                        filteredGuaranteedItems.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.name}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                   <Select
@@ -933,6 +983,13 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <Select
+                    open={isWeightedPickerOpen}
+                    onOpenChange={(open) => {
+                      setIsWeightedPickerOpen(open);
+                      if (!open) {
+                        setWeightedSearch('');
+                      }
+                    }}
                     value={selectedWeightedItemId}
                     onValueChange={setSelectedWeightedItemId}
                     disabled={availableWeightedItems.length === 0}
@@ -941,11 +998,28 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                       <SelectValue placeholder={availableWeightedItems.length === 0 ? "No available items" : "Select item"} />
                     </SelectTrigger>
                     <SelectContent>
-                      {availableWeightedItems.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.name}
-                        </SelectItem>
-                      ))}
+                      <div
+                        className="sticky top-0 z-10 bg-popover p-2"
+                        onPointerDown={(event) => event.stopPropagation()}
+                      >
+                        <Input
+                          autoFocus
+                          value={weightedSearch}
+                          onChange={(event) => setWeightedSearch(event.target.value)}
+                          placeholder="Search items..."
+                          className="h-8"
+                          onKeyDown={(event) => event.stopPropagation()}
+                        />
+                      </div>
+                      {filteredWeightedItems.length === 0 ? (
+                        <div className="px-3 py-2 text-sm text-foreground/60">No items found.</div>
+                      ) : (
+                        filteredWeightedItems.map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.name}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                   <Select
