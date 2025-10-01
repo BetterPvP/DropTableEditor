@@ -1,6 +1,6 @@
 'use client';
 
-import { createBrowserClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
 import { Database } from './types';
 
 export function createBrowserSupabaseClient() {
@@ -9,5 +9,4 @@ export function createBrowserSupabaseClient() {
   if (!url || !key) {
     throw new Error('Supabase environment variables are not configured.');
   }
-  return createBrowserClient<Database>(url, key);
-}
+  return createClient<Database>(url, key);}

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
 import { z } from 'zod';
 import { Database } from '@/supabase/types';
 
@@ -16,31 +16,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
   }
 
-  const supabase = createRouteHandlerClient<Database>({ cookies });
+  // Service role client: bypasses RLS
+  const admin = createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,  // project url (public is fine)
+    process.env.SUPABASE_SERVICE_ROLE_KEY!  // server-only secret
+  );
+
   const code = parsed.data.code.trim().toUpperCase();
-  const { data: invite, error } = await supabase
-    .from('invite_codes')
-    .select('*')
-    .eq('code', code)
-    .maybeSingle();
 
-  if (error) {
-    console.error('Failed to read invite code', error);
-    return NextResponse.json({ error: 'Unable to redeem code' }, { status: 500 });
-  }
-
-  if (!invite) {
-    return NextResponse.json({ error: 'Invite code not found' }, { status: 404 });
-  }
-
-  if (invite.used_at || invite.used_by) {
-    return NextResponse.json({ error: 'Invite code already used' }, { status: 409 });
-  }
-
-  const { error: updateError } = await supabase
+  // Update only if not already used
+  const { error: updateError } = await admin
     .from('invite_codes')
     .update({ used_at: new Date().toISOString(), used_by: parsed.data.userId })
-    .eq('code', code);
+    .eq('code', code)
+    .is('used_at', null)
+    .is('used_by', null);
 
   if (updateError) {
     console.error('Failed to mark invite code as used', updateError);

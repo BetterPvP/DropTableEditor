@@ -18,24 +18,14 @@ export async function POST(request: Request) {
 
   const supabase = createRouteHandlerClient<Database>({ cookies });
   const code = parsed.data.code.trim().toUpperCase();
-  const { data: invite, error } = await supabase
-    .from('invite_codes')
-    .select('*')
-    .eq('code', code)
-    .maybeSingle();
-
+  const { data, error } = await supabase.rpc('check_invite_code', { code });
   if (error) {
-    console.error('Failed to lookup invite code', error);
+    console.error('Failed to check invite code', error);
     return NextResponse.json({ error: 'Unable to verify invite code' }, { status: 500 });
   }
-
-  if (!invite) {
+  if (!data || data.length === 0) {
     return NextResponse.json({ error: 'Invite code not recognised' }, { status: 403 });
   }
 
-  if (invite.used_at || invite.used_by) {
-    return NextResponse.json({ error: 'Invite code already used' }, { status: 409 });
-  }
-
-  return NextResponse.json({ ok: true, role: invite.role ?? 'admin' });
+  return NextResponse.json({ ok: true, role: data[0].role ?? 'admin' });
 }

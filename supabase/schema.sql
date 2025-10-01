@@ -96,3 +96,15 @@ drop policy if exists "Guaranteed loot write by authenticated" on public.loot_ta
 create policy "Guaranteed loot write by authenticated" on public.loot_table_guaranteed
   for all using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
+
+create or replace function public.check_invite_code(code text)
+returns table(role text) as $$
+begin
+  return query
+    select invite_codes.role
+    from invite_codes
+    where invite_codes.code = check_invite_code.code
+      and invite_codes.used_at is null
+      and invite_codes.used_by is null;
+end;
+$$ language plpgsql security definer;

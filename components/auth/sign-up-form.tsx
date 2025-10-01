@@ -37,18 +37,20 @@ export function SignUpForm() {
 
     setLoading(true);
 
+    // Step 1: validate invite
     const validationResponse = await fetch('/api/invite/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ code: inviteCode, email }),
     });
     if (!validationResponse.ok) {
-      const payload = await validationResponse.json();
+      const payload = await validationResponse.json().catch(() => ({}));
       setError(payload.error ?? 'Invite code invalid');
       setLoading(false);
       return;
     }
 
+    // Step 2: sign up
     const supabase = createBrowserSupabaseClient();
     const { data, error: signUpError } = await supabase.auth.signUp({ email, password });
     if (signUpError) {
@@ -57,17 +59,28 @@ export function SignUpForm() {
       return;
     }
 
-    if (data.user?.id) {
-      await fetch('/api/invite/redeem', {
+    // Step 3: redeem invite only if session + user exists
+    if (data.user && data.session) {
+      const redeemRes = await fetch('/api/invite/redeem', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: inviteCode, userId: data.user.id }),
-      }).catch((redeemError) => {
-        console.error('Failed to redeem invite code', redeemError);
       });
+
+      if (!redeemRes.ok) {
+        const payload = await redeemRes.json().catch(() => ({}));
+        setError(payload.error ?? 'Failed to redeem invite code');
+        setLoading(false);
+        return; // don’t continue if redeem failed
+      }
+
+      // success: user is logged in already
+      setSuccess('Welcome, you are now logged in.');
+      // optionally: router.push('/dashboard');
+    } else {
+      setError('Sign up succeeded but no session was returned.');
     }
 
-    setSuccess('Account created. Check your email for confirmation.');
     setLoading(false);
   };
 
