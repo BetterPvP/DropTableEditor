@@ -3,7 +3,7 @@
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { createServerSupabaseClient } from '@/supabase/server';
-import { lootTableDefinitionSchema } from '@/lib/loot-tables/types';
+import { createDefaultAwardStrategy, lootTableDefinitionSchema } from '@/lib/loot-tables/types';
 
 const payloadSchema = z.object({
   name: z.string().min(1),
@@ -35,6 +35,7 @@ export async function createLootTableAction(formData: FormData) {
     name: parsed.data.name,
     description: parsed.data.description ?? undefined,
     notes: '',
+    awardStrategy: createDefaultAwardStrategy(),
     replacementStrategy: 'UNSET',
     rollStrategy: { type: 'CONSTANT', rolls: 1 },
     weightDistribution: 'STATIC',
