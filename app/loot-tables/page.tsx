@@ -43,6 +43,7 @@ async function Content({ query }: { query: string }) {
               name: table.name,
               description: table.description ?? undefined,
               notes: '',
+              awardStrategy: { type: 'DEFAULT' } as const,
               replacementStrategy: 'UNSET',
               rollStrategy: { type: 'CONSTANT', rolls: 1 },
               weightDistribution: 'STATIC',
