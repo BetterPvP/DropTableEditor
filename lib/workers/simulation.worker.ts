@@ -99,23 +99,30 @@ function adjustProgressiveWeights(
   config?: ProgressiveConfig,
 ) {
   if (!config) return;
-  const active = entries.filter((entry) => !entry.removed);
+  const active = entries.filter(e => !e.removed && e.currentWeight > 0);
   if (active.length === 0) return;
-  const average = active.reduce((sum, entry) => sum + entry.currentWeight, 0) / active.length;
-  for (const entry of active) {
-    const delta = average - entry.currentWeight;
-    let shift = delta * config.shiftFactor;
-    if (config.varianceScaling) {
+
+  const avg = active.reduce((s, e) => s + e.currentWeight, 0) / active.length;
+  const factor = config.shiftFactor ?? 0.5;
+  const maxShift = config.maxShift ?? 5;
+  const scaleVar = (config as any).enableVarianceScaling ?? config.varianceScaling ?? true;
+
+  for (const e of active) {
+    const delta = avg - e.currentWeight;
+    let shift = delta * factor;
+    if (scaleVar) {
       const spread = Math.abs(delta);
-      const scale = average === 0 ? 1 : spread / (average || 1);
+      const scale = avg === 0 ? 1 : spread / avg;
       shift *= scale;
     }
-    if (config.maxShift > 0) {
-      shift = Math.min(config.maxShift, Math.max(-config.maxShift, shift));
+    if (maxShift > 0) {
+      if (shift >  maxShift) shift =  maxShift;
+      if (shift < -maxShift) shift = -maxShift;
     }
-    entry.currentWeight = Math.max(0, entry.currentWeight + shift);
+    e.currentWeight = Math.max(0, e.currentWeight + shift);
   }
 }
+
 
 function pickEntry(
   entries: (LootEntry & { currentWeight: number; removed: boolean })[],
