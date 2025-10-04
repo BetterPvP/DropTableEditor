@@ -52,7 +52,7 @@ export const rollStrategySchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('PROGRESSIVE'),
     baseRolls: z.number().int().positive(),
-    rollIncrement: z.number().int().nonnegative(),
+    rollIncrement: z.number().nonnegative(),
     maxRolls: z.number().int().positive(),
   }),
   z.object({
