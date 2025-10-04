@@ -69,12 +69,19 @@ function applyPityWeights(
   entry: LootEntry & { currentWeight?: number },
   pityRules: Record<string, PityRule>,
   failedRuns: Record<string, number>,
+  awardedThisRun: Set<string>, // suppress pity inside current bundle/run
 ): number {
-  const rule = pityRules[entry.id];
   const baseWeight = entry.currentWeight ?? entry.weight;
+
+  // if already awarded in this run (including guaranteed), no pity boost
+  if (awardedThisRun.has(entry.id)) return baseWeight;
+
+  const rule = pityRules[entry.id];
   if (!rule) return baseWeight;
+
   const failedCount = failedRuns[entry.id] ?? 0;
   if (failedCount === 0) return baseWeight;
+
   const increments = Math.floor(failedCount / rule.maxAttempts);
   return baseWeight + increments * rule.weightIncrement;
 }
@@ -162,6 +169,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
       removed: false,
     }));
 
+    // guaranteed entries count as awarded for pity suppression in this run
     for (const guaranteedEntry of definition.guaranteed) {
       const quantity = randomInt(rng, guaranteedEntry.minYield, guaranteedEntry.maxYield);
       const existing =
@@ -193,19 +201,25 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
         quantity,
       });
       results.set(guaranteedEntry.id, existing);
+
+      runHits.add(guaranteedEntry.id); // suppress pity for this entry in this run
     }
 
     const rolls = getRollCount(definition.rollStrategy, rng);
     totalRollsByRun.push(rolls);
 
     for (let i = 0; i < rolls; i += 1) {
-      adjustProgressiveWeights(entries, definition.weightDistribution === 'PROGRESSIVE' ? definition.progressive : undefined);
+      adjustProgressiveWeights(
+        entries,
+        definition.weightDistribution === 'PROGRESSIVE' ? definition.progressive : undefined,
+      );
 
       const weightedEntries = entries.map((entry) => ({
         ...entry,
-        currentWeight: definition.weightDistribution === 'PITY'
-          ? applyPityWeights(entry, pityLookup, failedRuns)
-          : entry.currentWeight,
+        currentWeight:
+          definition.weightDistribution === 'PITY'
+            ? applyPityWeights(entry, pityLookup, failedRuns, runHits)
+            : entry.currentWeight,
       }));
 
       const selected = pickEntry(weightedEntries, rng);
@@ -235,7 +249,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
       }
       if (!runHits.has(selected.id)) {
         existing.bundleHits += 1;
-        runHits.add(selected.id);
+        runHits.add(selected.id); // mark awarded so later rolls get no pity for this entry
       }
       if (existing.firstAppearance === null) {
         existing.firstAppearance = globalRollIndex + 1;
