@@ -52,18 +52,26 @@ function resolveReplacement(entry: LootEntry, tableStrategy: LootTableDefinition
   return entry.replacementStrategy === 'UNSET' ? tableStrategy : entry.replacementStrategy;
 }
 
-function getRollCount(strategy: LootTableDefinition['rollStrategy'], rng: () => number) {
+function getRollCount(
+  strategy: LootTableDefinition['rollStrategy'],
+  runIndex: number,
+  rng: () => number
+) {
   switch (strategy.type) {
     case 'CONSTANT':
-      return Math.max(0, strategy.rolls);
-    case 'PROGRESSIVE':
-      return Math.min(strategy.maxRolls, strategy.baseRolls + randomInt(rng, 0, strategy.rollIncrement));
+      return Math.max(0, Math.floor(strategy.rolls));
+    case 'PROGRESSIVE': {
+      const progressCount = runIndex; // simulates LootProgress.history.size()
+      const value = strategy.baseRolls + progressCount * strategy.rollIncrement;
+      return Math.min(Math.floor(value), Math.floor(strategy.maxRolls));
+    }
     case 'RANDOM':
       return randomInt(rng, strategy.min, strategy.max);
     default:
       return 0;
   }
 }
+
 
 function applyPityWeights(
   entry: LootEntry & { currentWeight?: number },
@@ -205,7 +213,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
       runHits.add(guaranteedEntry.id); // suppress pity for this entry in this run
     }
 
-    const rolls = getRollCount(definition.rollStrategy, rng);
+    const rolls = getRollCount(definition.rollStrategy, run, rng);
     totalRollsByRun.push(rolls);
 
     for (let i = 0; i < rolls; i += 1) {
