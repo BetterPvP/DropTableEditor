@@ -20,6 +20,9 @@ import {
   computeWeightTotals,
   ensureUniqueEntries,
   replacementStrategies,
+  awardStrategyTypes,
+  lootChestTypes,
+  lootTableDefinitionSchema,
 } from '@/lib/loot-tables/types';
 import { useAutosave } from '@/lib/hooks/use-autosave';
 import { saveLootTableAction } from '@/app/loot-tables/[id]/actions';
@@ -38,6 +41,26 @@ interface LootTableEditorProps {
 type RollStrategyState = LootTableDefinition['rollStrategy'];
 
 type WeightDistributionState = LootTableDefinition['weightDistribution'];
+
+type AwardStrategyState = LootTableDefinition['awardStrategy'];
+
+type CustomLootChestStrategy = Extract<
+  AwardStrategyState,
+  { type: 'LOOT_CHEST'; chestType: 'CUSTOM' }
+>;
+
+type LootChestOption = (typeof lootChestTypes)[number];
+
+const awardStrategyLabelMap: Record<AwardStrategyState['type'], string> = {
+  DEFAULT: 'Default',
+  LOOT_CHEST: 'Loot chest',
+};
+
+const lootChestLabelMap: Record<LootChestOption, string> = {
+  BIG: 'Big loot chest',
+  SMALL: 'Small loot chest',
+  CUSTOM: 'Custom loot chest',
+};
 
 function getReplacement(entry: LootEntry, fallback: ReplacementStrategy) {
   return entry.replacementStrategy === 'UNSET' ? fallback : entry.replacementStrategy;
@@ -230,6 +253,11 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
     return items.filter((item) => !takenIds.has(item.id));
   }, [definition.guaranteed, items]);
 
+  const customAwardStrategy =
+    definition.awardStrategy.type === 'LOOT_CHEST' && definition.awardStrategy.chestType === 'CUSTOM'
+      ? definition.awardStrategy
+      : null;
+
   const autosave = useAutosave({
     key: `loot-table:${tableId}`,
     version: definition.version,
@@ -281,6 +309,55 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
     } else if (!definition.progressive) {
       handleFieldChange('progressive', { maxShift: 0, shiftFactor: 0, varianceScaling: false });
     }
+  };
+
+  const setAwardStrategy = (updater: (prev: AwardStrategyState) => AwardStrategyState) => {
+    setDefinition((prev) => ({ ...prev, awardStrategy: updater(prev.awardStrategy) }));
+  };
+
+  const handleAwardStrategySelection = (type: AwardStrategyState['type']) => {
+    if (type === 'DEFAULT') {
+      setAwardStrategy(() => ({ type: 'DEFAULT' }));
+      return;
+    }
+    setAwardStrategy((prev) => {
+      if (prev.type === 'LOOT_CHEST') {
+        return prev;
+      }
+      return { type: 'LOOT_CHEST', chestType: 'BIG' };
+    });
+  };
+
+  const handleLootChestTypeChange = (chestType: LootChestOption) => {
+    setAwardStrategy((prev) => {
+      if (chestType === 'CUSTOM') {
+        const existing = prev.type === 'LOOT_CHEST' && prev.chestType === 'CUSTOM' ? prev : null;
+        return {
+          type: 'LOOT_CHEST',
+          chestType: 'CUSTOM',
+          mythicMobName: existing?.mythicMobName ?? '',
+          soundEffect: existing?.soundEffect ?? { key: '', pitch: 1, volume: 1 },
+          dropDelay: existing?.dropDelay ?? 0,
+          dropInterval: existing?.dropInterval ?? 0,
+        } satisfies CustomLootChestStrategy;
+      }
+      return {
+        type: 'LOOT_CHEST',
+        chestType,
+      };
+    });
+  };
+
+  const handleCustomLootChestChange = <K extends Exclude<keyof CustomLootChestStrategy, 'type' | 'chestType'>>(
+    key: K,
+    value: CustomLootChestStrategy[K],
+  ) => {
+    setAwardStrategy((prev) => {
+      if (prev.type !== 'LOOT_CHEST' || prev.chestType !== 'CUSTOM') {
+        return prev;
+      }
+      return { ...prev, [key]: value };
+    });
   };
 
   const handleEntryChange = (id: string, changes: Partial<LootEntry>) => {
@@ -342,14 +419,20 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
     if (!file) return;
     try {
       const text = await file.text();
-      const parsed = JSON.parse(text) as LootTableDefinition;
+      const raw = JSON.parse(text);
+      const parsed = lootTableDefinitionSchema.safeParse(raw);
+      if (!parsed.success) {
+        console.error('Failed to import loot table: schema mismatch', parsed.error);
+        setError('Unable to import loot table. Ensure it matches the expected schema.');
+        return;
+      }
       setDefinition((prev) => ({
-        ...parsed,
+        ...parsed.data,
         id: prev.id,
         version: prev.version,
         updated_at: new Date().toISOString(),
       }));
-      addNotification(`Imported ${parsed.name}. Review and save to persist.`, 'success');
+      addNotification(`Imported ${parsed.data.name}. Review and save to persist.`, 'success');
       setError(null);
     } catch (importError) {
       console.error(importError);
@@ -558,6 +641,165 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                     </Button>
                   ))}
                 </div>
+              </section>
+
+              <section className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Award strategy</Label>
+                  <p className="text-xs text-foreground/60">
+                    Decide how the completed bundle is delivered to players.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {awardStrategyTypes.map((strategy) => (
+                      <Button
+                        key={strategy}
+                        type="button"
+                        variant={definition.awardStrategy.type === strategy ? 'default' : 'outline'}
+                        onClick={() => handleAwardStrategySelection(strategy)}
+                      >
+                        {awardStrategyLabelMap[strategy]}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {definition.awardStrategy.type === 'LOOT_CHEST' && (
+                  <div className="space-y-4 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                    <div className="space-y-2">
+                      <Label>Loot chest type</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {lootChestTypes.map((option) => (
+                          <Button
+                            key={option}
+                            type="button"
+                            variant={
+                              definition.awardStrategy.type === 'LOOT_CHEST' &&
+                              definition.awardStrategy.chestType === option
+                                ? 'default'
+                                : 'outline'
+                            }
+                            onClick={() => handleLootChestTypeChange(option)}
+                          >
+                            {lootChestLabelMap[option]}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {definition.awardStrategy.chestType === 'CUSTOM' && customAwardStrategy && (
+                      <div className="space-y-4">
+                        <div className="space-y-1">
+                          <Label htmlFor="custom-mythic-mob">Mythic mob name</Label>
+                          <Input
+                            id="custom-mythic-mob"
+                            value={customAwardStrategy.mythicMobName}
+                            onChange={(event) =>
+                              handleCustomLootChestChange('mythicMobName', event.target.value)
+                            }
+                            onBlur={autosave.handleBlur}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Sound effect</Label>
+                          <div className="grid gap-3 sm:grid-cols-3">
+                            <div className="space-y-1">
+                              <Label htmlFor="custom-sound-key" className="text-xs font-medium text-foreground/70">
+                                Namespace:key
+                              </Label>
+                              <Input
+                                id="custom-sound-key"
+                                value={customAwardStrategy.soundEffect?.key ?? ''}
+                                onChange={(event) =>
+                                  handleCustomLootChestChange('soundEffect', {
+                                    ...(customAwardStrategy.soundEffect ?? { key: '', pitch: 1, volume: 1 }),
+                                    key: event.target.value,
+                                  })
+                                }
+                                onBlur={autosave.handleBlur}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="custom-sound-pitch" className="text-xs font-medium text-foreground/70">
+                                Pitch
+                              </Label>
+                              <Input
+                                id="custom-sound-pitch"
+                                type="number"
+                                min={0}
+                                step={0.05}
+                                value={customAwardStrategy.soundEffect?.pitch ?? 1}
+                                onChange={(event) =>
+                                  handleCustomLootChestChange('soundEffect', {
+                                    ...(customAwardStrategy.soundEffect ?? { key: '', pitch: 1, volume: 1 }),
+                                    pitch: Number(event.target.value) >= 0 ? Number(event.target.value) : 0,
+                                  })
+                                }
+                                onBlur={autosave.handleBlur}
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <Label htmlFor="custom-sound-volume" className="text-xs font-medium text-foreground/70">
+                                Volume
+                              </Label>
+                              <Input
+                                id="custom-sound-volume"
+                                type="number"
+                                min={0}
+                                step={0.05}
+                                value={customAwardStrategy.soundEffect?.volume ?? 1}
+                                onChange={(event) =>
+                                  handleCustomLootChestChange('soundEffect', {
+                                    ...(customAwardStrategy.soundEffect ?? { key: '', pitch: 1, volume: 1 }),
+                                    volume: Number(event.target.value) >= 0 ? Number(event.target.value) : 0,
+                                  })
+                                }
+                                onBlur={autosave.handleBlur}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1">
+                            <Label htmlFor="custom-drop-delay">Drop delay (ticks)</Label>
+                            <Input
+                              id="custom-drop-delay"
+                              type="number"
+                              min={0}
+                              value={customAwardStrategy.dropDelay}
+                              onChange={(event) =>
+                                handleCustomLootChestChange(
+                                  'dropDelay',
+                                  Number.isNaN(Number(event.target.value))
+                                    ? 0
+                                    : Math.max(0, Math.floor(Number(event.target.value))),
+                                )
+                              }
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label htmlFor="custom-drop-interval">Drop interval (ticks)</Label>
+                            <Input
+                              id="custom-drop-interval"
+                              type="number"
+                              min={0}
+                              value={customAwardStrategy.dropInterval}
+                              onChange={(event) =>
+                                handleCustomLootChestChange(
+                                  'dropInterval',
+                                  Number.isNaN(Number(event.target.value))
+                                    ? 0
+                                    : Math.max(0, Math.floor(Number(event.target.value))),
+                                )
+                              }
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </section>
 
               <section className="space-y-4">
