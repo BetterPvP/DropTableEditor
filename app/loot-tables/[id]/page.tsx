@@ -43,6 +43,7 @@ export default async function LootTableEditorPage({ params }: LootTableEditorPag
         name: table.name,
         description: table.description ?? undefined,
         notes: '',
+        awardStrategy: { type: 'DEFAULT' } as const,
         replacementStrategy: 'UNSET' as const,
         rollStrategy: { type: 'CONSTANT', rolls: 1 } as const,
         weightDistribution: 'STATIC' as const,

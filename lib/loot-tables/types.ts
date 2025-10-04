@@ -29,6 +29,32 @@ export const rollStrategySchema = z.discriminatedUnion('type', [
 
 export type RollStrategy = z.infer<typeof rollStrategySchema>;
 
+export const awardStrategyTypes = ['DEFAULT', 'LOOT_CHEST'] as const;
+export type AwardStrategyType = (typeof awardStrategyTypes)[number];
+
+export const lootChestTypes = ['BIG', 'SMALL', 'CUSTOM'] as const;
+export type LootChestType = (typeof lootChestTypes)[number];
+
+export const soundEffectSchema = z.object({
+  key: z.string().default(''),
+  pitch: z.number().nonnegative().default(1),
+  volume: z.number().nonnegative().default(1),
+});
+
+export const awardStrategySchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('DEFAULT') }),
+  z.object({
+    type: z.literal('LOOT_CHEST'),
+    chestType: z.enum(lootChestTypes).default('BIG'),
+    mythicMobName: z.string().default(''),
+    soundEffect: soundEffectSchema.default({ key: '', pitch: 1, volume: 1 }),
+    dropDelay: z.number().int().nonnegative().default(0),
+    dropInterval: z.number().int().nonnegative().default(0),
+  }),
+]);
+
+export type AwardStrategy = z.infer<typeof awardStrategySchema>;
+
 export const lootEntryBaseSchema = z.object({
   id: z.string(),
   type: z.enum(lootTypes),
@@ -68,6 +94,7 @@ export const lootTableDefinitionSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
   notes: z.string().optional(),
+  awardStrategy: awardStrategySchema.default({ type: 'DEFAULT' }),
   replacementStrategy: z.enum(replacementStrategies).default('UNSET'),
   rollStrategy: rollStrategySchema,
   weightDistribution: z.enum(weightDistributionStrategies).default('STATIC'),

@@ -35,6 +35,7 @@ export async function createLootTableAction(formData: FormData) {
     name: parsed.data.name,
     description: parsed.data.description ?? undefined,
     notes: '',
+    awardStrategy: { type: 'DEFAULT' },
     replacementStrategy: 'UNSET',
     rollStrategy: { type: 'CONSTANT', rolls: 1 },
     weightDistribution: 'STATIC',

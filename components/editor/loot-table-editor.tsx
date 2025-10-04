@@ -17,8 +17,10 @@ import {
   LootEntry,
   LootTableDefinition,
   ReplacementStrategy,
+  awardStrategyTypes,
   computeWeightTotals,
   ensureUniqueEntries,
+  lootChestTypes,
   replacementStrategies,
 } from '@/lib/loot-tables/types';
 import { useAutosave } from '@/lib/hooks/use-autosave';
@@ -38,6 +40,17 @@ interface LootTableEditorProps {
 type RollStrategyState = LootTableDefinition['rollStrategy'];
 
 type WeightDistributionState = LootTableDefinition['weightDistribution'];
+
+type AwardStrategyState = LootTableDefinition['awardStrategy'];
+
+const defaultLootChestAwardStrategy: Extract<AwardStrategyState, { type: 'LOOT_CHEST' }> = {
+  type: 'LOOT_CHEST',
+  chestType: 'BIG',
+  mythicMobName: '',
+  soundEffect: { key: '', pitch: 1, volume: 1 },
+  dropDelay: 0,
+  dropInterval: 0,
+};
 
 function getReplacement(entry: LootEntry, fallback: ReplacementStrategy) {
   return entry.replacementStrategy === 'UNSET' ? fallback : entry.replacementStrategy;
@@ -281,6 +294,19 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
     } else if (!definition.progressive) {
       handleFieldChange('progressive', { maxShift: 0, shiftFactor: 0, varianceScaling: false });
     }
+  };
+
+  const handleAwardStrategyChange = (strategy: AwardStrategyState) => {
+    handleFieldChange('awardStrategy', strategy);
+  };
+
+  const updateLootChestStrategy = (
+    changes: Partial<Extract<AwardStrategyState, { type: 'LOOT_CHEST' }>>,
+  ) => {
+    if (definition.awardStrategy.type !== 'LOOT_CHEST') {
+      return;
+    }
+    handleAwardStrategyChange({ ...definition.awardStrategy, ...changes });
   };
 
   const handleEntryChange = (id: string, changes: Partial<LootEntry>) => {
@@ -541,6 +567,181 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              <section className="space-y-4">
+                <Label>Award strategy</Label>
+                <p className="text-xs text-foreground/60">
+                  Decide how the bundle reaches the player: instantly or via a loot chest with optional customisation.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {awardStrategyTypes.map((strategy) => (
+                    <Button
+                      key={strategy}
+                      type="button"
+                      variant={definition.awardStrategy.type === strategy ? 'default' : 'outline'}
+                      onClick={() => {
+                        if (strategy === 'DEFAULT') {
+                          handleAwardStrategyChange({ type: 'DEFAULT' });
+                        } else {
+                          handleAwardStrategyChange(
+                            definition.awardStrategy.type === 'LOOT_CHEST'
+                              ? definition.awardStrategy
+                              : {
+                                  ...defaultLootChestAwardStrategy,
+                                  soundEffect: {
+                                    ...defaultLootChestAwardStrategy.soundEffect,
+                                  },
+                                },
+                          );
+                        }
+                      }}
+                    >
+                      {strategy === 'DEFAULT' ? 'Default' : 'Loot chest'}
+                    </Button>
+                  ))}
+                </div>
+
+                {definition.awardStrategy.type === 'LOOT_CHEST' && (
+                  <div className="space-y-4 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                    <div className="space-y-2">
+                      <Label>Loot chest type</Label>
+                      <div className="flex flex-wrap gap-2">
+                        {lootChestTypes.map((chestType) => (
+                          <Button
+                            key={chestType}
+                            type="button"
+                            variant={definition.awardStrategy.chestType === chestType ? 'default' : 'outline'}
+                            onClick={() => updateLootChestStrategy({ chestType })}
+                          >
+                            {chestType === 'BIG'
+                              ? 'Big loot chest'
+                              : chestType === 'SMALL'
+                                ? 'Small loot chest'
+                                : 'Custom loot chest'}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {definition.awardStrategy.chestType === 'CUSTOM' && (
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label htmlFor="award-mythic-mob">Mythic mob name</Label>
+                          <Input
+                            id="award-mythic-mob"
+                            value={definition.awardStrategy.mythicMobName}
+                            onChange={(event) =>
+                              updateLootChestStrategy({ mythicMobName: event.target.value })
+                            }
+                            onBlur={autosave.handleBlur}
+                          />
+                        </div>
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label htmlFor="award-sound-key">Sound effect (namespace:key)</Label>
+                          <Input
+                            id="award-sound-key"
+                            value={definition.awardStrategy.soundEffect?.key ?? ''}
+                            onChange={(event) =>
+                              updateLootChestStrategy({
+                                soundEffect: {
+                                  ...(definition.awardStrategy.soundEffect ?? {
+                                    key: '',
+                                    pitch: 1,
+                                    volume: 1,
+                                  }),
+                                  key: event.target.value,
+                                },
+                              })
+                            }
+                            onBlur={autosave.handleBlur}
+                          />
+                          <p className="text-xs text-foreground/50">Provide the sound identifier in namespace:key format.</p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="award-sound-pitch">Sound pitch</Label>
+                          <Input
+                            id="award-sound-pitch"
+                            type="number"
+                            min={0}
+                            step="0.05"
+                            value={definition.awardStrategy.soundEffect?.pitch ?? 1}
+                            onChange={(event) => {
+                              const pitch = Number(event.target.value);
+                              updateLootChestStrategy({
+                                soundEffect: {
+                                  ...(definition.awardStrategy.soundEffect ?? {
+                                    key: '',
+                                    pitch: 1,
+                                    volume: 1,
+                                  }),
+                                  pitch: Number.isFinite(pitch) ? Math.max(0, pitch) : 1,
+                                },
+                              });
+                            }}
+                            onBlur={autosave.handleBlur}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="award-sound-volume">Sound volume</Label>
+                          <Input
+                            id="award-sound-volume"
+                            type="number"
+                            min={0}
+                            step="0.05"
+                            value={definition.awardStrategy.soundEffect?.volume ?? 1}
+                            onChange={(event) => {
+                              const volume = Number(event.target.value);
+                              updateLootChestStrategy({
+                                soundEffect: {
+                                  ...(definition.awardStrategy.soundEffect ?? {
+                                    key: '',
+                                    pitch: 1,
+                                    volume: 1,
+                                  }),
+                                  volume: Number.isFinite(volume) ? Math.max(0, volume) : 1,
+                                },
+                              });
+                            }}
+                            onBlur={autosave.handleBlur}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="award-drop-delay">Drop delay (ticks)</Label>
+                          <Input
+                            id="award-drop-delay"
+                            type="number"
+                            min={0}
+                            value={definition.awardStrategy.dropDelay}
+                            onChange={(event) => {
+                              const dropDelay = Number(event.target.value);
+                              updateLootChestStrategy({
+                                dropDelay: Number.isFinite(dropDelay) ? Math.max(0, dropDelay) : 0,
+                              });
+                            }}
+                            onBlur={autosave.handleBlur}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="award-drop-interval">Drop interval (ticks)</Label>
+                          <Input
+                            id="award-drop-interval"
+                            type="number"
+                            min={0}
+                            value={definition.awardStrategy.dropInterval}
+                            onChange={(event) => {
+                              const dropInterval = Number(event.target.value);
+                              updateLootChestStrategy({
+                                dropInterval: Number.isFinite(dropInterval) ? Math.max(0, dropInterval) : 0,
+                              });
+                            }}
+                            onBlur={autosave.handleBlur}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+
               <section className="space-y-2">
                 <Label>Replacement strategy</Label>
                 <p className="text-xs text-foreground/60">
