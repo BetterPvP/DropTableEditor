@@ -57,9 +57,9 @@ const awardStrategyLabelMap: Record<AwardStrategyState['type'], string> = {
 };
 
 const lootChestLabelMap: Record<LootChestOption, string> = {
-  BIG: 'Big loot chest',
-  SMALL: 'Small loot chest',
-  CUSTOM: 'Custom loot chest',
+  BIG: 'Big',
+  SMALL: 'Small',
+  CUSTOM: 'Custom',
 };
 
 function getReplacement(entry: LootEntry, fallback: ReplacementStrategy) {
@@ -699,6 +699,44 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                             onBlur={autosave.handleBlur}
                           />
                         </div>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div className="space-y-1">
+                            <Label htmlFor="custom-drop-delay">Drop delay (ticks)</Label>
+                            <Input
+                              id="custom-drop-delay"
+                              type="number"
+                              min={0}
+                              value={customAwardStrategy.dropDelay}
+                              onChange={(event) =>
+                                handleCustomLootChestChange(
+                                  'dropDelay',
+                                  Number.isNaN(Number(event.target.value))
+                                    ? 0
+                                    : Math.max(0, Math.floor(Number(event.target.value))),
+                                )
+                              }
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label htmlFor="custom-drop-interval">Drop interval (ticks)</Label>
+                            <Input
+                              id="custom-drop-interval"
+                              type="number"
+                              min={0}
+                              value={customAwardStrategy.dropInterval}
+                              onChange={(event) =>
+                                handleCustomLootChestChange(
+                                  'dropInterval',
+                                  Number.isNaN(Number(event.target.value))
+                                    ? 0
+                                    : Math.max(0, Math.floor(Number(event.target.value))),
+                                )
+                              }
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                        </div>
                         <div className="space-y-2">
                           <Label>Sound effect</Label>
                           <div className="grid gap-3 sm:grid-cols-3">
@@ -756,44 +794,6 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                                 onBlur={autosave.handleBlur}
                               />
                             </div>
-                          </div>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-2">
-                          <div className="space-y-1">
-                            <Label htmlFor="custom-drop-delay">Drop delay (ticks)</Label>
-                            <Input
-                              id="custom-drop-delay"
-                              type="number"
-                              min={0}
-                              value={customAwardStrategy.dropDelay}
-                              onChange={(event) =>
-                                handleCustomLootChestChange(
-                                  'dropDelay',
-                                  Number.isNaN(Number(event.target.value))
-                                    ? 0
-                                    : Math.max(0, Math.floor(Number(event.target.value))),
-                                )
-                              }
-                              onBlur={autosave.handleBlur}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label htmlFor="custom-drop-interval">Drop interval (ticks)</Label>
-                            <Input
-                              id="custom-drop-interval"
-                              type="number"
-                              min={0}
-                              value={customAwardStrategy.dropInterval}
-                              onChange={(event) =>
-                                handleCustomLootChestChange(
-                                  'dropInterval',
-                                  Number.isNaN(Number(event.target.value))
-                                    ? 0
-                                    : Math.max(0, Math.floor(Number(event.target.value))),
-                                )
-                              }
-                              onBlur={autosave.handleBlur}
-                            />
                           </div>
                         </div>
                       </div>
