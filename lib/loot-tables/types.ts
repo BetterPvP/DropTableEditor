@@ -6,6 +6,41 @@ export type ReplacementStrategy = (typeof replacementStrategies)[number];
 export const lootTypes = ['dropped_item', 'given_item'] as const;
 export type LootType = (typeof lootTypes)[number];
 
+export const awardStrategyTypes = ['DEFAULT', 'LOOT_CHEST'] as const;
+export type AwardStrategyType = (typeof awardStrategyTypes)[number];
+
+export const lootChestTypes = ['BIG', 'SMALL', 'CUSTOM'] as const;
+export type LootChestType = (typeof lootChestTypes)[number];
+
+const soundEffectSchema = z.object({
+  key: z.string(),
+  pitch: z.number().nonnegative().default(1),
+  volume: z.number().nonnegative().default(1),
+});
+
+const defaultAwardStrategySchema = z.object({
+  type: z.literal('DEFAULT'),
+});
+
+const lootChestAwardStrategySchema = z.union([
+  z.object({
+    type: z.literal('LOOT_CHEST'),
+    chestType: z.union([z.literal('BIG'), z.literal('SMALL')]),
+  }),
+  z.object({
+    type: z.literal('LOOT_CHEST'),
+    chestType: z.literal('CUSTOM'),
+    mythicMobName: z.string().default(''),
+    soundEffect: soundEffectSchema.default({ key: '', pitch: 1, volume: 1 }),
+    dropDelay: z.number().int().nonnegative().default(0),
+    dropInterval: z.number().int().nonnegative().default(0),
+  }),
+]);
+
+export const awardStrategySchema = z.union([defaultAwardStrategySchema, lootChestAwardStrategySchema]);
+
+export type AwardStrategy = z.infer<typeof awardStrategySchema>;
+
 export const weightDistributionStrategies = ['STATIC', 'PITY', 'PROGRESSIVE'] as const;
 export type WeightDistributionStrategy = (typeof weightDistributionStrategies)[number];
 
@@ -73,6 +108,7 @@ export const lootTableDefinitionSchema = z.object({
   weightDistribution: z.enum(weightDistributionStrategies).default('STATIC'),
   pityRules: z.array(pityRuleSchema).default([]),
   progressive: progressiveConfigSchema.optional(),
+  awardStrategy: awardStrategySchema.default({ type: 'DEFAULT' }),
   entries: z.array(itemLootSchema),
   guaranteed: z.array(itemLootSchema).default([]),
   version: z.number().int().nonnegative().default(0),

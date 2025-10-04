@@ -40,6 +40,7 @@ export async function createLootTableAction(formData: FormData) {
     weightDistribution: 'STATIC',
     pityRules: [],
     progressive: undefined,
+    awardStrategy: { type: 'DEFAULT' },
     entries: [],
     guaranteed: [],
     version: 1,

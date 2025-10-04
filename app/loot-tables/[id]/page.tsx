@@ -48,6 +48,7 @@ export default async function LootTableEditorPage({ params }: LootTableEditorPag
         weightDistribution: 'STATIC' as const,
         pityRules: [],
         progressive: undefined,
+        awardStrategy: { type: 'DEFAULT' } as const,
         entries: [],
         guaranteed: [],
         version: table.version,
