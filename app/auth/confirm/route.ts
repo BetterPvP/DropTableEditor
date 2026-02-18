@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
+import type { EmailOtpType } from '@supabase/supabase-js';
 import { Database } from '@/supabase/types';
 
 export async function GET(request: NextRequest) {
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
     );
 
     const { data, error } = await supabase.auth.verifyOtp({
-      type: type as Parameters<typeof supabase.auth.verifyOtp>[0]['type'],
+      type: type as EmailOtpType,
       token_hash,
     });
 
