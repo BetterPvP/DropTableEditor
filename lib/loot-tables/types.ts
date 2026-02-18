@@ -3,8 +3,22 @@ import { z } from 'zod';
 export const replacementStrategies = ['UNSET', 'WITH_REPLACEMENT', 'WITHOUT_REPLACEMENT'] as const;
 export type ReplacementStrategy = (typeof replacementStrategies)[number];
 
-export const lootTypes = ['dropped_item', 'given_item'] as const;
+export const lootTypes = [
+  'dropped_item',
+  'given_item',
+  'dropped_coin',
+  'given_coin',
+  'dropped_clan_energy',
+  'given_clan_energy',
+  'clan_experience',
+] as const;
 export type LootType = (typeof lootTypes)[number];
+
+export const coinTypes = ['SMALL_NUGGET', 'LARGE_NUGGET', 'BAR'] as const;
+export type CoinType = (typeof coinTypes)[number];
+
+export const energyTypes = ['SHARD', 'SMALL_CRYSTAL', 'LARGE_CRYSTAL', 'GIANT_CRYSTAL'] as const;
+export type EnergyType = (typeof energyTypes)[number];
 
 export const awardStrategyTypes = ['DEFAULT', 'LOOT_CHEST'] as const;
 export type AwardStrategyType = (typeof awardStrategyTypes)[number];
@@ -44,9 +58,6 @@ export type AwardStrategy = z.infer<typeof awardStrategySchema>;
 export const weightDistributionStrategies = ['STATIC', 'PITY', 'PROGRESSIVE'] as const;
 export type WeightDistributionStrategy = (typeof weightDistributionStrategies)[number];
 
-export const rollStrategyTypes = ['CONSTANT', 'PROGRESSIVE', 'RANDOM'] as const;
-export type RollStrategyType = (typeof rollStrategyTypes)[number];
-
 export const rollStrategySchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('CONSTANT'), rolls: z.number().int().positive().default(1) }),
   z.object({
@@ -80,7 +91,41 @@ export const itemLootSchema = lootEntryBaseSchema.extend({
 
 export type ItemLoot = z.infer<typeof itemLootSchema>;
 
-export type LootEntry = ItemLoot;
+export const coinLootSchema = lootEntryBaseSchema.extend({
+  type: z.union([z.literal('dropped_coin'), z.literal('given_coin')]),
+  coinType: z.enum(coinTypes),
+  minAmount: z.number().int().nonnegative().default(1),
+  maxAmount: z.number().int().positive().default(1),
+});
+
+export type CoinLoot = z.infer<typeof coinLootSchema>;
+
+export const clanEnergyLootSchema = lootEntryBaseSchema.extend({
+  type: z.union([z.literal('dropped_clan_energy'), z.literal('given_clan_energy')]),
+  energyType: z.enum(energyTypes),
+  minAmount: z.number().int().nonnegative().default(1),
+  maxAmount: z.number().int().positive().default(1),
+  autoDeposit: z.boolean().default(false),
+});
+
+export type ClanEnergyLoot = z.infer<typeof clanEnergyLootSchema>;
+
+export const clanExperienceLootSchema = lootEntryBaseSchema.extend({
+  type: z.literal('clan_experience'),
+  minXp: z.number().int().nonnegative().default(100),
+  maxXp: z.number().int().positive().default(100),
+});
+
+export type ClanExperienceLoot = z.infer<typeof clanExperienceLootSchema>;
+
+export const lootEntrySchema = z.union([
+  itemLootSchema,
+  coinLootSchema,
+  clanEnergyLootSchema,
+  clanExperienceLootSchema,
+]);
+
+export type LootEntry = z.infer<typeof lootEntrySchema>;
 
 export const pityRuleSchema = z.object({
   entryId: z.string(),
@@ -109,8 +154,8 @@ export const lootTableDefinitionSchema = z.object({
   pityRules: z.array(pityRuleSchema).default([]),
   progressive: progressiveConfigSchema.optional(),
   awardStrategy: awardStrategySchema.default({ type: 'DEFAULT' }),
-  entries: z.array(itemLootSchema),
-  guaranteed: z.array(itemLootSchema).default([]),
+  entries: z.array(lootEntrySchema),
+  guaranteed: z.array(lootEntrySchema).default([]),
   version: z.number().int().nonnegative().default(0),
   updated_at: z.string(),
 });
@@ -132,9 +177,9 @@ export interface SimulationResultEntry {
   entryId: string;
   type: LootType;
   totalDrops: number;
-  minYield: number;
-  maxYield: number;
-  itemId: string;
+  minYield?: number;
+  maxYield?: number;
+  itemId?: string;
   firstAppearedAt: number | null;
   firstRunAppearance: number | null;
   probability: number;
@@ -152,6 +197,13 @@ export interface SimulationResult {
   entries: SimulationResultEntry[];
 }
 
+export function getEntryKey(entry: LootEntry): string {
+  if (entry.type === 'dropped_item' || entry.type === 'given_item') return entry.itemId;
+  if (entry.type === 'dropped_coin' || entry.type === 'given_coin') return `${entry.type}:${entry.coinType}`;
+  if (entry.type === 'dropped_clan_energy' || entry.type === 'given_clan_energy') return `${entry.type}:${entry.energyType}`;
+  return entry.type;
+}
+
 export function computeWeightTotals(entries: LootEntry[]): { totalWeight: number; probabilities: Record<string, number> } {
   const totalWeight = entries.reduce((sum, entry) => sum + entry.weight, 0);
   const probabilities = Object.fromEntries(
@@ -163,10 +215,8 @@ export function computeWeightTotals(entries: LootEntry[]): { totalWeight: number
 export function ensureUniqueEntries(entries: LootEntry[]): LootEntry[] {
   const seen = new Set<string>();
   return entries.filter((entry) => {
-    const key = entry.type.startsWith('dropped') || entry.type.startsWith('given') ? entry.itemId : entry.id;
-    if (seen.has(key)) {
-      return false;
-    }
+    const key = getEntryKey(entry);
+    if (seen.has(key)) return false;
     seen.add(key);
     return true;
   });

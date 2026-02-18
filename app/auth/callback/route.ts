@@ -5,7 +5,7 @@ export async function POST(request: Request) {
   const supabase = createServerSupabaseClient();
   const { event, session } = await request.json();
 
-  if (session && ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED'].includes(event)) {
+  if (session && ['SIGNED_IN', 'TOKEN_REFRESHED', 'USER_UPDATED', 'PASSWORD_RECOVERY'].includes(event)) {
     await supabase.auth.setSession(session);
   }
 

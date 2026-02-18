@@ -10,6 +10,24 @@ import {
   SimulationResultEntrySource,
 } from '../loot-tables/types';
 
+function getQuantityRange(entry: LootEntry): { min: number; max: number } {
+  if (entry.type === 'dropped_item' || entry.type === 'given_item') {
+    return { min: entry.minYield, max: entry.maxYield };
+  }
+  if (
+    entry.type === 'dropped_coin' ||
+    entry.type === 'given_coin' ||
+    entry.type === 'dropped_clan_energy' ||
+    entry.type === 'given_clan_energy'
+  ) {
+    return { min: entry.minAmount, max: entry.maxAmount };
+  }
+  if (entry.type === 'clan_experience') {
+    return { min: entry.minXp, max: entry.maxXp };
+  }
+  return { min: 0, max: 0 };
+}
+
 interface StartMessage {
   type: 'start';
   definition: LootTableDefinition;
@@ -186,7 +204,8 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
 
     // guaranteed entries count as awarded for pity suppression in this run
     for (const guaranteedEntry of definition.guaranteed) {
-      const quantity = randomInt(rng, guaranteedEntry.minYield, guaranteedEntry.maxYield);
+      const { min: gMin, max: gMax } = getQuantityRange(guaranteedEntry);
+      const quantity = randomInt(rng, gMin, gMax);
       const existing =
         results.get(guaranteedEntry.id) ?? {
           entry: { ...guaranteedEntry },
@@ -240,7 +259,8 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
       const selected = pickEntry(weightedEntries, rng);
       if (!selected) break;
 
-      const quantity = randomInt(rng, selected.minYield, selected.maxYield);
+      const { min: sMin, max: sMax } = getQuantityRange(selected);
+      const quantity = randomInt(rng, sMin, sMax);
       const existing =
         results.get(selected.id) ?? {
           entry: { ...selected },
@@ -320,9 +340,9 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     entryId,
     type: payload.entry.type,
     totalDrops: payload.totalDrops,
-    minYield: payload.entry.minYield,
-    maxYield: payload.entry.maxYield,
-    itemId: payload.entry.itemId,
+    minYield: payload.entry.type === 'dropped_item' || payload.entry.type === 'given_item' ? payload.entry.minYield : undefined,
+    maxYield: payload.entry.type === 'dropped_item' || payload.entry.type === 'given_item' ? payload.entry.maxYield : undefined,
+    itemId: payload.entry.type === 'dropped_item' || payload.entry.type === 'given_item' ? payload.entry.itemId : undefined,
     firstAppearedAt: payload.firstAppearance,
     firstRunAppearance: payload.firstRun,
     probability:

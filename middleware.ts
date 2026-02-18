@@ -3,7 +3,11 @@ import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { Database } from './supabase/types';
 
-const PUBLIC_PATHS = ['/auth/sign-in', '/auth/sign-up'];
+const PUBLIC_PATHS = [
+  '/auth/sign-in',
+  '/auth/sign-up',
+  '/auth/reset-password'
+];
 
 export async function middleware(request: NextRequest) {
   const response = NextResponse.next();
@@ -44,9 +48,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  if (session && isAuthRoute) {
-    const redirectUrl = new URL('/loot-tables', request.url);
-    return NextResponse.redirect(redirectUrl);
+  const UNREDIRECTABLE_AUTH_PATHS = ['/auth/reset-password', '/auth/confirm'];
+  if (session && isAuthRoute && !UNREDIRECTABLE_AUTH_PATHS.includes(pathname)) {
+    return NextResponse.redirect(new URL('/loot-tables', request.url));
   }
 
   return response;

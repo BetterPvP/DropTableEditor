@@ -15,10 +15,16 @@ import { SaveIndicator } from '@/components/save-indicator';
 import { JSONPreview } from './json-preview';
 import {
   LootEntry,
+  LootType,
   LootTableDefinition,
   ReplacementStrategy,
+  ItemLoot,
+  CoinType,
+  EnergyType,
+  coinTypes,
+  energyTypes,
   computeWeightTotals,
-  ensureUniqueEntries,
+  getEntryKey,
   replacementStrategies,
   awardStrategyTypes,
   lootChestTypes,
@@ -61,6 +67,59 @@ const lootChestLabelMap: Record<LootChestOption, string> = {
   SMALL: 'Small',
   CUSTOM: 'Custom',
 };
+
+const coinTypeLabels: Record<CoinType, string> = {
+  SMALL_NUGGET: 'Small Gold Nugget',
+  LARGE_NUGGET: 'Large Gold Nugget',
+  BAR: 'Gold Bar',
+};
+
+const energyTypeLabels: Record<EnergyType, string> = {
+  SHARD: 'Energy Shard',
+  SMALL_CRYSTAL: 'Energy Crystal',
+  LARGE_CRYSTAL: 'Large Energy Crystal',
+  GIANT_CRYSTAL: 'Giant Energy Cluster',
+};
+
+const lootTypeSelectLabels: Record<LootType, string> = {
+  dropped_item: 'Dropped item',
+  given_item: 'Given item',
+  dropped_coin: 'Dropped coin',
+  given_coin: 'Given coin',
+  dropped_clan_energy: 'Dropped energy',
+  given_clan_energy: 'Given energy',
+  clan_experience: 'Clan experience',
+};
+
+type BadgeConfig = { label: string; variant: 'default' | 'destructive'; className?: string };
+
+function getEntryBadgeConfig(type: LootType): BadgeConfig {
+  switch (type) {
+    case 'dropped_item': return { label: 'Dropped', variant: 'destructive' };
+    case 'given_item': return { label: 'Given', variant: 'default', className: 'bg-purple-500/20 text-purple-300 border-purple-500/30' };
+    case 'dropped_coin': return { label: 'Dropped coin', variant: 'default', className: 'bg-amber-500/20 text-amber-300 border-amber-500/30' };
+    case 'given_coin': return { label: 'Given coin', variant: 'default', className: 'bg-amber-500/20 text-amber-300 border-amber-500/30' };
+    case 'dropped_clan_energy': return { label: 'Dropped energy', variant: 'default', className: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' };
+    case 'given_clan_energy': return { label: 'Given energy', variant: 'default', className: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' };
+    case 'clan_experience': return { label: 'Clan XP', variant: 'default', className: 'bg-green-500/20 text-green-300 border-green-500/30' };
+  }
+}
+
+function getLootEntryLabel(
+  entry: LootEntry,
+  items: Database['public']['Tables']['items']['Row'][],
+): string {
+  if (entry.type === 'dropped_item' || entry.type === 'given_item') {
+    return items.find((i) => i.id === entry.itemId)?.name ?? entry.itemId;
+  }
+  if (entry.type === 'dropped_coin' || entry.type === 'given_coin') {
+    return coinTypeLabels[entry.coinType];
+  }
+  if (entry.type === 'dropped_clan_energy' || entry.type === 'given_clan_energy') {
+    return energyTypeLabels[entry.energyType];
+  }
+  return 'Clan Experience';
+}
 
 function getReplacement(entry: LootEntry, fallback: ReplacementStrategy) {
   return entry.replacementStrategy === 'UNSET' ? fallback : entry.replacementStrategy;
@@ -217,9 +276,13 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
   const [isDeleting, startDeleting] = useTransition();
   const [isDuplicating, startDuplicating] = useTransition();
   const [selectedWeightedItemId, setSelectedWeightedItemId] = useState<string>('');
-  const [selectedWeightedType, setSelectedWeightedType] = useState<LootEntry['type']>('dropped_item');
+  const [selectedWeightedType, setSelectedWeightedType] = useState<LootType>('dropped_item');
+  const [selectedWeightedCoinType, setSelectedWeightedCoinType] = useState<CoinType>('SMALL_NUGGET');
+  const [selectedWeightedEnergyType, setSelectedWeightedEnergyType] = useState<EnergyType>('SHARD');
   const [selectedGuaranteedItemId, setSelectedGuaranteedItemId] = useState<string>('');
-  const [selectedGuaranteedType, setSelectedGuaranteedType] = useState<LootEntry['type']>('given_item');
+  const [selectedGuaranteedType, setSelectedGuaranteedType] = useState<LootType>('given_item');
+  const [selectedGuaranteedCoinType, setSelectedGuaranteedCoinType] = useState<CoinType>('SMALL_NUGGET');
+  const [selectedGuaranteedEnergyType, setSelectedGuaranteedEnergyType] = useState<EnergyType>('SHARD');
 
   const addNotification = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
     const id = Math.random().toString(36).slice(2);
@@ -244,12 +307,20 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
   );
 
   const availableWeightedItems = useMemo(() => {
-    const takenIds = new Set(definition.entries.map((entry) => entry.itemId));
+    const takenIds = new Set(
+      definition.entries
+        .filter((e): e is ItemLoot => e.type === 'dropped_item' || e.type === 'given_item')
+        .map((e) => e.itemId),
+    );
     return items.filter((item) => !takenIds.has(item.id));
   }, [definition.entries, items]);
 
   const availableGuaranteedItems = useMemo(() => {
-    const takenIds = new Set(definition.guaranteed.map((entry) => entry.itemId));
+    const takenIds = new Set(
+      definition.guaranteed
+        .filter((e): e is ItemLoot => e.type === 'dropped_item' || e.type === 'given_item')
+        .map((e) => e.itemId),
+    );
     return items.filter((item) => !takenIds.has(item.id));
   }, [definition.guaranteed, items]);
 
@@ -360,51 +431,65 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
     });
   };
 
-  const handleEntryChange = (id: string, changes: Partial<LootEntry>) => {
+  const handleEntryChange = (id: string, changes: Record<string, unknown>) => {
     setDefinition((prev) => ({
       ...prev,
-      entries: prev.entries.map((entry) => (entry.id === id ? { ...entry, ...changes } : entry)),
+      entries: prev.entries.map((entry) => (entry.id === id ? { ...entry, ...changes } as LootEntry : entry)),
     }));
   };
 
-  const handleGuaranteedChange = (id: string, changes: Partial<LootEntry>) => {
+  const handleGuaranteedChange = (id: string, changes: Record<string, unknown>) => {
     setDefinition((prev) => ({
       ...prev,
-      guaranteed: prev.guaranteed.map((entry) => (entry.id === id ? { ...entry, ...changes } : entry)),
+      guaranteed: prev.guaranteed.map((entry) => (entry.id === id ? { ...entry, ...changes } as LootEntry : entry)),
     }));
   };
 
-  const addLoot = (itemId: string, target: 'entries' | 'guaranteed', type: LootEntry['type']) => {
-    if (!itemId) {
-      addNotification('Select an item to add.', 'info');
-      return;
-    }
-    const item = items.find((candidate) => candidate.id === itemId);
-    if (!item) {
-      setError('Selected item could not be found.');
-      return;
-    }
-    setDefinition((prev) => {
-      const existing = target === 'entries' ? prev.entries : prev.guaranteed;
-      if (existing.some((entry) => entry.itemId === item.id)) {
-        setError('That item is already present in this section.');
-        return prev;
+  const addEntry = (target: 'entries' | 'guaranteed') => {
+    const type = target === 'entries' ? selectedWeightedType : selectedGuaranteedType;
+    const baseEntry = { id: generateEntryId(), weight: 1, replacementStrategy: 'UNSET' as const };
+
+    let newEntry: LootEntry;
+    let successMessage: string;
+
+    if (type === 'dropped_item' || type === 'given_item') {
+      const itemId = target === 'entries' ? selectedWeightedItemId : selectedGuaranteedItemId;
+      if (!itemId) {
+        addNotification('Select an item to add.', 'info');
+        return;
       }
-      const entry: LootEntry = {
-        id: generateEntryId(),
-        type,
-        itemId: item.id,
-        minYield: 1,
-        maxYield: 1,
-        weight: 1,
-        replacementStrategy: 'UNSET',
-      };
-      return {
-        ...prev,
-        [target]: ensureUniqueEntries([entry, ...existing]),
-      };
-    });
-    addNotification(`${type === 'dropped_item' ? 'Dropped' : 'Given'} item ${item.name} added.`, 'success');
+      const item = items.find((i) => i.id === itemId);
+      if (!item) {
+        setError('Selected item could not be found.');
+        return;
+      }
+      newEntry = { ...baseEntry, type, itemId: item.id, minYield: 1, maxYield: 1 };
+      successMessage = `${type === 'dropped_item' ? 'Dropped' : 'Given'} item ${item.name ?? item.id} added.`;
+    } else if (type === 'dropped_coin' || type === 'given_coin') {
+      const coinType = target === 'entries' ? selectedWeightedCoinType : selectedGuaranteedCoinType;
+      newEntry = { ...baseEntry, type, coinType, minAmount: 1, maxAmount: 1 };
+      successMessage = `${coinTypeLabels[coinType]} coin loot added.`;
+    } else if (type === 'dropped_clan_energy' || type === 'given_clan_energy') {
+      const energyType = target === 'entries' ? selectedWeightedEnergyType : selectedGuaranteedEnergyType;
+      newEntry = { ...baseEntry, type, energyType, minAmount: 1, maxAmount: 1, autoDeposit: false };
+      successMessage = `${energyTypeLabels[energyType]} energy loot added.`;
+    } else {
+      newEntry = { ...baseEntry, type: 'clan_experience', minXp: 100, maxXp: 100 };
+      successMessage = 'Clan experience loot added.';
+    }
+
+    const targetArray = target === 'entries' ? definition.entries : definition.guaranteed;
+    const newKey = getEntryKey(newEntry);
+    if (targetArray.some((e) => getEntryKey(e) === newKey)) {
+      setError('That entry is already present in this section.');
+      return;
+    }
+
+    setDefinition((prev) => ({
+      ...prev,
+      [target]: [newEntry, ...(target === 'entries' ? prev.entries : prev.guaranteed)],
+    }));
+    addNotification(successMessage, 'success');
   };
 
   const removeEntry = (id: string, target: 'entries' | 'guaranteed') => {
@@ -1009,7 +1094,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                             <SelectContent>
                               {definition.entries.map((entry) => (
                                 <SelectItem key={entry.id} value={entry.id}>
-                                  {items.find((item) => item.id === entry.itemId)?.name ?? entry.itemId}
+                                  {getLootEntryLabel(entry, items)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -1181,36 +1266,54 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                   </CardDescription>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <ItemCombobox
-                    className="sm:w-64"
-                    items={availableGuaranteedItems}
-                    value={selectedGuaranteedItemId}
-                    onSelect={setSelectedGuaranteedItemId}
-                    disabled={availableGuaranteedItems.length === 0}
-                    placeholder={
-                      availableGuaranteedItems.length === 0
-                        ? 'No available items'
-                        : 'Search or select item'
-                    }
-                  />
                   <Select
                     value={selectedGuaranteedType}
-                    onValueChange={(value) => setSelectedGuaranteedType(value as LootEntry['type'])}
+                    onValueChange={(value) => setSelectedGuaranteedType(value as LootType)}
                   >
-                    <SelectTrigger className="sm:w-44">
+                    <SelectTrigger className="sm:w-48">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="given_item">Given item</SelectItem>
-                      <SelectItem value="dropped_item">Dropped item</SelectItem>
+                      {(Object.keys(lootTypeSelectLabels) as LootType[]).map((t) => (
+                        <SelectItem key={t} value={t}>{lootTypeSelectLabels[t]}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                  {(selectedGuaranteedType === 'dropped_item' || selectedGuaranteedType === 'given_item') && (
+                    <ItemCombobox
+                      className="sm:w-64"
+                      items={availableGuaranteedItems}
+                      value={selectedGuaranteedItemId}
+                      onSelect={setSelectedGuaranteedItemId}
+                      disabled={availableGuaranteedItems.length === 0}
+                      placeholder={availableGuaranteedItems.length === 0 ? 'No available items' : 'Search or select item'}
+                    />
+                  )}
+                  {(selectedGuaranteedType === 'dropped_coin' || selectedGuaranteedType === 'given_coin') && (
+                    <Select value={selectedGuaranteedCoinType} onValueChange={(value) => setSelectedGuaranteedCoinType(value as CoinType)}>
+                      <SelectTrigger className="sm:w-48"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {coinTypes.map((ct) => <SelectItem key={ct} value={ct}>{coinTypeLabels[ct]}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {(selectedGuaranteedType === 'dropped_clan_energy' || selectedGuaranteedType === 'given_clan_energy') && (
+                    <Select value={selectedGuaranteedEnergyType} onValueChange={(value) => setSelectedGuaranteedEnergyType(value as EnergyType)}>
+                      <SelectTrigger className="sm:w-52"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {energyTypes.map((et) => <SelectItem key={et} value={et}>{energyTypeLabels[et]}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
                     className="gap-2"
-                    onClick={() => addLoot(selectedGuaranteedItemId, 'guaranteed', selectedGuaranteedType)}
-                    disabled={availableGuaranteedItems.length === 0 || !selectedGuaranteedItemId}
+                    onClick={() => addEntry('guaranteed')}
+                    disabled={
+                      (selectedGuaranteedType === 'given_item' || selectedGuaranteedType === 'dropped_item') &&
+                      (availableGuaranteedItems.length === 0 || !selectedGuaranteedItemId)
+                    }
                   >
                     <Plus className="h-4 w-4" /> Add guaranteed loot
                   </Button>
@@ -1227,17 +1330,15 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 </p>
               )}
               {definition.guaranteed.map((entry) => {
-                const item = items.find((itemRecord) => itemRecord.id === entry.itemId);
+                const label = getLootEntryLabel(entry, items);
+                const { label: badgeLabel, variant: badgeVariant, className: badgeClassName } = getEntryBadgeConfig(entry.type);
                 return (
                   <div key={entry.id} className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/40 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-white">{item?.name ?? entry.itemId}</p>
-                        <Badge
-                          variant={entry.type === 'dropped_item' ? 'destructive' : 'default'}
-                          className={entry.type === 'given_item' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : ''}
-                        >
-                          {entry.type === 'dropped_item' ? 'Dropped' : 'Given'}
+                        <p className="text-sm font-semibold text-white">{label}</p>
+                        <Badge variant={badgeVariant} className={badgeClassName ?? ''}>
+                          {badgeLabel}
                         </Badge>
                       </div>
                       <Button type="button" variant="ghost" size="icon" onClick={() => removeEntry(entry.id, 'guaranteed')}>
@@ -1251,61 +1352,115 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                           type="number"
                           min={0}
                           value={entry.weight}
-                          onChange={(event) =>
-                            handleGuaranteedChange(entry.id, { weight: Number(event.target.value) || 0 })
-                          }
+                          onChange={(event) => handleGuaranteedChange(entry.id, { weight: Number(event.target.value) || 0 })}
                           onBlur={autosave.handleBlur}
                         />
                         <p className="text-xs text-foreground/50">Weight is stored for export parity even though guarantees always trigger.</p>
                       </div>
-                      <div className="space-y-1">
-                        <Label>Min yield</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={entry.minYield}
-                          onChange={(event) =>
-                            handleGuaranteedChange(entry.id, { minYield: Number(event.target.value) || 0 })
-                          }
-                          onBlur={autosave.handleBlur}
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Max yield</Label>
-                        <Input
-                          type="number"
-                          min={entry.minYield}
-                          value={entry.maxYield}
-                          onChange={(event) =>
-                            handleGuaranteedChange(entry.id, { maxYield: Number(event.target.value) || entry.maxYield })
-                          }
-                          onBlur={autosave.handleBlur}
-                        />
-                      </div>
+                      {(entry.type === 'dropped_item' || entry.type === 'given_item') ? (
+                        <>
+                          <div className="space-y-1">
+                            <Label>Min yield</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={entry.minYield}
+                              onChange={(event) => handleGuaranteedChange(entry.id, { minYield: Number(event.target.value) || 0 })}
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Max yield</Label>
+                            <Input
+                              type="number"
+                              min={entry.minYield}
+                              value={entry.maxYield}
+                              onChange={(event) => handleGuaranteedChange(entry.id, { maxYield: Number(event.target.value) || entry.maxYield })}
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                        </>
+                      ) : (entry.type === 'dropped_coin' || entry.type === 'given_coin' || entry.type === 'dropped_clan_energy' || entry.type === 'given_clan_energy') ? (
+                        <>
+                          <div className="space-y-1">
+                            <Label>Min amount</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={entry.minAmount}
+                              onChange={(event) => handleGuaranteedChange(entry.id, { minAmount: Number(event.target.value) || 0 })}
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Max amount</Label>
+                            <Input
+                              type="number"
+                              min={entry.minAmount}
+                              value={entry.maxAmount}
+                              onChange={(event) => handleGuaranteedChange(entry.id, { maxAmount: Number(event.target.value) || entry.maxAmount })}
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                        </>
+                      ) : entry.type === 'clan_experience' ? (
+                        <>
+                          <div className="space-y-1">
+                            <Label>Min XP</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={entry.minXp}
+                              onChange={(event) => handleGuaranteedChange(entry.id, { minXp: Number(event.target.value) || 0 })}
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Max XP</Label>
+                            <Input
+                              type="number"
+                              min={entry.minXp}
+                              value={entry.maxXp}
+                              onChange={(event) => handleGuaranteedChange(entry.id, { maxXp: Number(event.target.value) || entry.maxXp })}
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                        </>
+                      ) : null}
                       <div className="space-y-1">
                         <Label>Replacement</Label>
                         <Select
                           value={entry.replacementStrategy}
-                          onValueChange={(value) =>
-                            handleGuaranteedChange(entry.id, {
-                              replacementStrategy: value as ReplacementStrategy,
-                            })
-                          }
+                          onValueChange={(value) => handleGuaranteedChange(entry.id, { replacementStrategy: value as ReplacementStrategy })}
                         >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             {replacementStrategies.map((strategy) => (
-                              <SelectItem key={strategy} value={strategy}>
-                                {strategy}
-                              </SelectItem>
+                              <SelectItem key={strategy} value={strategy}>{strategy}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-foreground/50">Guarantees rarely need overrides, but the option is here for parity.</p>
                       </div>
                     </div>
+                    {(entry.type === 'dropped_clan_energy' || entry.type === 'given_clan_energy') && (
+                      <div className="grid gap-3 sm:grid-cols-4">
+                        <div className="space-y-1">
+                          <Label>Auto deposit</Label>
+                          <Select
+                            value={entry.autoDeposit ? 'true' : 'false'}
+                            onValueChange={(value) => handleGuaranteedChange(entry.id, { autoDeposit: value === 'true' })}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="false">No</SelectItem>
+                              <SelectItem value="true">Yes</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-foreground/50">Automatically deposit energy into the player's clan.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -1322,36 +1477,54 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                   </CardDescription>
                 </div>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <ItemCombobox
-                    className="sm:w-64"
-                    items={availableWeightedItems}
-                    value={selectedWeightedItemId}
-                    onSelect={setSelectedWeightedItemId}
-                    disabled={availableWeightedItems.length === 0}
-                    placeholder={
-                      availableWeightedItems.length === 0
-                        ? 'No available items'
-                        : 'Search or select item'
-                    }
-                  />
                   <Select
                     value={selectedWeightedType}
-                    onValueChange={(value) => setSelectedWeightedType(value as LootEntry['type'])}
+                    onValueChange={(value) => setSelectedWeightedType(value as LootType)}
                   >
-                    <SelectTrigger className="sm:w-44">
+                    <SelectTrigger className="sm:w-48">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="dropped_item">Dropped item</SelectItem>
-                      <SelectItem value="given_item">Given item</SelectItem>
+                      {(Object.keys(lootTypeSelectLabels) as LootType[]).map((t) => (
+                        <SelectItem key={t} value={t}>{lootTypeSelectLabels[t]}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
+                  {(selectedWeightedType === 'dropped_item' || selectedWeightedType === 'given_item') && (
+                    <ItemCombobox
+                      className="sm:w-64"
+                      items={availableWeightedItems}
+                      value={selectedWeightedItemId}
+                      onSelect={setSelectedWeightedItemId}
+                      disabled={availableWeightedItems.length === 0}
+                      placeholder={availableWeightedItems.length === 0 ? 'No available items' : 'Search or select item'}
+                    />
+                  )}
+                  {(selectedWeightedType === 'dropped_coin' || selectedWeightedType === 'given_coin') && (
+                    <Select value={selectedWeightedCoinType} onValueChange={(value) => setSelectedWeightedCoinType(value as CoinType)}>
+                      <SelectTrigger className="sm:w-48"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {coinTypes.map((ct) => <SelectItem key={ct} value={ct}>{coinTypeLabels[ct]}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {(selectedWeightedType === 'dropped_clan_energy' || selectedWeightedType === 'given_clan_energy') && (
+                    <Select value={selectedWeightedEnergyType} onValueChange={(value) => setSelectedWeightedEnergyType(value as EnergyType)}>
+                      <SelectTrigger className="sm:w-52"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {energyTypes.map((et) => <SelectItem key={et} value={et}>{energyTypeLabels[et]}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Button
                     type="button"
                     variant="outline"
                     className="gap-2"
-                    onClick={() => addLoot(selectedWeightedItemId, 'entries', selectedWeightedType)}
-                    disabled={availableWeightedItems.length === 0 || !selectedWeightedItemId}
+                    onClick={() => addEntry('entries')}
+                    disabled={
+                      (selectedWeightedType === 'given_item' || selectedWeightedType === 'dropped_item') &&
+                      (availableWeightedItems.length === 0 || !selectedWeightedItemId)
+                    }
                   >
                     <Plus className="h-4 w-4" /> Add loot
                   </Button>
@@ -1375,19 +1548,17 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 </p>
               )}
               {definition.entries.map((entry) => {
-                const item = items.find((itemRecord) => itemRecord.id === entry.itemId);
+                const label = getLootEntryLabel(entry, items);
+                const { label: badgeLabel, variant: badgeVariant, className: badgeClassName } = getEntryBadgeConfig(entry.type);
                 const probability = probabilities[entry.id] ?? 0;
                 const replacement = getReplacement(entry, definition.replacementStrategy);
                 return (
                   <div key={entry.id} className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/40 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
-                        <p className="text-sm font-semibold text-white">{item?.name ?? entry.itemId}</p>
-                        <Badge
-                          variant={entry.type === 'dropped_item' ? 'destructive' : 'default'}
-                          className={entry.type === 'given_item' ? 'bg-purple-500/20 text-purple-300 border-purple-500/30' : ''}
-                        >
-                          {entry.type === 'dropped_item' ? 'Dropped' : 'Given'}
+                        <p className="text-sm font-semibold text-white">{label}</p>
+                        <Badge variant={badgeVariant} className={badgeClassName ?? ''}>
+                          {badgeLabel}
                         </Badge>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1404,63 +1575,121 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                           type="number"
                           min={0}
                           value={entry.weight}
-                          onChange={(event) =>
-                            handleEntryChange(entry.id, { weight: Number(event.target.value) || 0 })
-                          }
+                          onChange={(event) => handleEntryChange(entry.id, { weight: Number(event.target.value) || 0 })}
                           onBlur={autosave.handleBlur}
                         />
                         <p className="text-xs text-foreground/50">Higher weight increases selection odds.</p>
                       </div>
-                      <div className="space-y-1">
-                        <Label>Min yield</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={entry.minYield}
-                          onChange={(event) =>
-                            handleEntryChange(entry.id, { minYield: Number(event.target.value) || 0 })
-                          }
-                          onBlur={autosave.handleBlur}
-                        />
-                        <p className="text-xs text-foreground/50">Minimum quantity dropped when this loot wins.</p>
-                      </div>
-                      <div className="space-y-1">
-                        <Label>Max yield</Label>
-                        <Input
-                          type="number"
-                          min={entry.minYield}
-                          value={entry.maxYield}
-                          onChange={(event) =>
-                            handleEntryChange(entry.id, { maxYield: Number(event.target.value) || entry.maxYield })
-                          }
-                          onBlur={autosave.handleBlur}
-                        />
-                        <p className="text-xs text-foreground/50">Cap the possible amount per selection.</p>
-                      </div>
+                      {(entry.type === 'dropped_item' || entry.type === 'given_item') ? (
+                        <>
+                          <div className="space-y-1">
+                            <Label>Min yield</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={entry.minYield}
+                              onChange={(event) => handleEntryChange(entry.id, { minYield: Number(event.target.value) || 0 })}
+                              onBlur={autosave.handleBlur}
+                            />
+                            <p className="text-xs text-foreground/50">Minimum quantity dropped when this loot wins.</p>
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Max yield</Label>
+                            <Input
+                              type="number"
+                              min={entry.minYield}
+                              value={entry.maxYield}
+                              onChange={(event) => handleEntryChange(entry.id, { maxYield: Number(event.target.value) || entry.maxYield })}
+                              onBlur={autosave.handleBlur}
+                            />
+                            <p className="text-xs text-foreground/50">Cap the possible amount per selection.</p>
+                          </div>
+                        </>
+                      ) : (entry.type === 'dropped_coin' || entry.type === 'given_coin' || entry.type === 'dropped_clan_energy' || entry.type === 'given_clan_energy') ? (
+                        <>
+                          <div className="space-y-1">
+                            <Label>Min amount</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={entry.minAmount}
+                              onChange={(event) => handleEntryChange(entry.id, { minAmount: Number(event.target.value) || 0 })}
+                              onBlur={autosave.handleBlur}
+                            />
+                            <p className="text-xs text-foreground/50">Minimum amount awarded when this loot wins.</p>
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Max amount</Label>
+                            <Input
+                              type="number"
+                              min={entry.minAmount}
+                              value={entry.maxAmount}
+                              onChange={(event) => handleEntryChange(entry.id, { maxAmount: Number(event.target.value) || entry.maxAmount })}
+                              onBlur={autosave.handleBlur}
+                            />
+                            <p className="text-xs text-foreground/50">Cap the possible amount per selection.</p>
+                          </div>
+                        </>
+                      ) : entry.type === 'clan_experience' ? (
+                        <>
+                          <div className="space-y-1">
+                            <Label>Min XP</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={entry.minXp}
+                              onChange={(event) => handleEntryChange(entry.id, { minXp: Number(event.target.value) || 0 })}
+                              onBlur={autosave.handleBlur}
+                            />
+                            <p className="text-xs text-foreground/50">Minimum clan XP awarded when this loot wins.</p>
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Max XP</Label>
+                            <Input
+                              type="number"
+                              min={entry.minXp}
+                              value={entry.maxXp}
+                              onChange={(event) => handleEntryChange(entry.id, { maxXp: Number(event.target.value) || entry.maxXp })}
+                              onBlur={autosave.handleBlur}
+                            />
+                            <p className="text-xs text-foreground/50">Cap the possible XP per selection.</p>
+                          </div>
+                        </>
+                      ) : null}
                       <div className="space-y-1">
                         <Label>Replacement</Label>
                         <Select
                           value={replacement}
-                          onValueChange={(value) =>
-                            handleEntryChange(entry.id, {
-                              replacementStrategy: value as ReplacementStrategy,
-                            })
-                          }
+                          onValueChange={(value) => handleEntryChange(entry.id, { replacementStrategy: value as ReplacementStrategy })}
                         >
-                          <SelectTrigger>
-                            <SelectValue />
-                          </SelectTrigger>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             {replacementStrategies.map((strategy) => (
-                              <SelectItem key={strategy} value={strategy}>
-                                {strategy}
-                              </SelectItem>
+                              <SelectItem key={strategy} value={strategy}>{strategy}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                         <p className="text-xs text-foreground/50">Override the table replacement rule when needed.</p>
                       </div>
                     </div>
+                    {(entry.type === 'dropped_clan_energy' || entry.type === 'given_clan_energy') && (
+                      <div className="grid gap-3 sm:grid-cols-4">
+                        <div className="space-y-1">
+                          <Label>Auto deposit</Label>
+                          <Select
+                            value={entry.autoDeposit ? 'true' : 'false'}
+                            onValueChange={(value) => handleEntryChange(entry.id, { autoDeposit: value === 'true' })}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="false">No</SelectItem>
+                              <SelectItem value="true">Yes</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-foreground/50">Automatically deposit energy into the player's clan.</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
