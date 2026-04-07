@@ -41,13 +41,24 @@ create table if not exists public.loot_table_guaranteed (
   primary key (loot_table_id, created_at)
 );
 
+create table if not exists public.loot_table_snapshots (
+  id uuid primary key default gen_random_uuid(),
+  loot_table_id uuid not null references public.loot_tables(id) on delete cascade,
+  definition jsonb not null,
+  label text,
+  created_by uuid references auth.users(id),
+  created_at timestamptz default now()
+);
+
 create index if not exists items_created_at_idx on public.items (created_at desc);
 create index if not exists loot_tables_updated_at_idx on public.loot_tables (updated_at desc);
+create index if not exists loot_table_snapshots_loot_table_id_idx on public.loot_table_snapshots (loot_table_id, created_at desc);
 
 alter table public.invite_codes enable row level security;
 alter table public.items enable row level security;
 alter table public.loot_tables enable row level security;
 alter table public.loot_table_guaranteed enable row level security;
+alter table public.loot_table_snapshots enable row level security;
 
 drop policy if exists "Invite codes readable by authenticated" on public.invite_codes;
 create policy "Invite codes readable by authenticated" on public.invite_codes
@@ -101,6 +112,14 @@ create policy "Guaranteed loot write by authenticated" on public.loot_table_guar
   for all using (auth.role() = 'authenticated')
   with check (auth.role() = 'authenticated');
 
+drop policy if exists "Loot table snapshots readable by authenticated" on public.loot_table_snapshots;
+create policy "Loot table snapshots readable by authenticated" on public.loot_table_snapshots
+  for select using (auth.role() = 'authenticated');
+
+drop policy if exists "Loot table snapshots insert by authenticated" on public.loot_table_snapshots;
+create policy "Loot table snapshots insert by authenticated" on public.loot_table_snapshots
+  for insert with check (auth.role() = 'authenticated');
+
 drop policy if exists "Items delete by authenticated" on public.items;
 create policy "Items delete by authenticated" on public.items
   for delete using (auth.role() = 'authenticated');
@@ -116,3 +135,5 @@ begin
       and invite_codes.used_by is null;
 end;
 $$ language plpgsql security definer;
+
+alter publication supabase_realtime add table public.loot_tables;

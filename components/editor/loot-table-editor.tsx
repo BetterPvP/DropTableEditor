@@ -1,9 +1,8 @@
 'use client';
 
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { useTransition } from 'react';
+import { ChangeEvent, FocusEvent, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { ChevronsUpDown, Copy, Download, Plus, Share2, Trash2, Upload, Wand2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsUpDown, Copy, Download, Plus, Share2, Trash2, Upload, Wand2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -31,8 +30,11 @@ import {
   lootTableDefinitionSchema,
 } from '@/lib/loot-tables/types';
 import { useAutosave } from '@/lib/hooks/use-autosave';
-import { saveLootTableAction } from '@/app/(dashboard)/loot-tables/[id]/actions';
-import { deleteLootTableAction, duplicateLootTableAction } from '@/app/(dashboard)/loot-tables/actions';
+import { usePresence } from '@/lib/hooks/use-presence';
+import { useCollabSync } from '@/lib/hooks/use-collab-sync';
+import { PresenceField } from './presence-overlay';
+import { createSnapshotAction, saveLootTableAction } from '@/app/(dashboard)/loot-tables/[id]/actions';
+import { deleteLootTableAction } from '@/app/(dashboard)/loot-tables/actions';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/supabase/types';
 import { useRouter } from 'next/navigation';
@@ -42,6 +44,9 @@ interface LootTableEditorProps {
   definition: LootTableDefinition;
   metadata: Record<string, unknown> | null;
   items: Database['public']['Tables']['items']['Row'][];
+  userId: string;
+  displayName: string;
+  color: string;
 }
 
 type RollStrategyState = LootTableDefinition['rollStrategy'];
@@ -267,14 +272,20 @@ function ItemCombobox({ items, value, onSelect, placeholder, disabled, className
   );
 }
 
-export function LootTableEditor({ tableId, definition: initialDefinition, metadata, items }: LootTableEditorProps) {
+export function LootTableEditor({
+  tableId,
+  definition: initialDefinition,
+  metadata,
+  items,
+  userId,
+  displayName,
+  color,
+}: LootTableEditorProps) {
   const router = useRouter();
   const [definition, setDefinition] = useState<LootTableDefinition>(initialDefinition);
   const [error, setError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isSaving, startSaving] = useTransition();
   const [isDeleting, startDeleting] = useTransition();
-  const [isDuplicating, startDuplicating] = useTransition();
   const [selectedWeightedItemId, setSelectedWeightedItemId] = useState<string>('');
   const [selectedWeightedType, setSelectedWeightedType] = useState<LootType>('dropped_item');
   const [selectedWeightedCoinType, setSelectedWeightedCoinType] = useState<CoinType>('SMALL_NUGGET');
@@ -283,6 +294,15 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
   const [selectedGuaranteedType, setSelectedGuaranteedType] = useState<LootType>('given_item');
   const [selectedGuaranteedCoinType, setSelectedGuaranteedCoinType] = useState<CoinType>('SMALL_NUGGET');
   const [selectedGuaranteedEnergyType, setSelectedGuaranteedEnergyType] = useState<EnergyType>('SHARD');
+  const [collapsedEntries, setCollapsedEntries] = useState<Set<string>>(new Set());
+
+  const toggleEntryCollapse = (id: string) => {
+    setCollapsedEntries((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const addNotification = (message: string, type: 'success' | 'info' | 'error' = 'info') => {
     const id = Math.random().toString(36).slice(2);
@@ -329,9 +349,45 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
       ? definition.awardStrategy
       : null;
 
+  const setDefinitionState = useCallback((nextDefinition: LootTableDefinition) => {
+    setDefinition(nextDefinition);
+  }, []);
+
+  const sessionId = useRef(
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `session-${Math.random().toString(36).slice(2)}`
+  ).current;
+  const { others, trackFocus, untrackFocus } = usePresence(tableId, { userId, sessionId, displayName, color });
+  const { broadcastPatch } = useCollabSync(tableId, definition, setDefinitionState, sessionId);
+
+  const applyDefinitionUpdate = useCallback((
+    updater: (prev: LootTableDefinition) => LootTableDefinition,
+    broadcastPath?: keyof LootTableDefinition,
+  ) => {
+    let nextDefinition: LootTableDefinition | null = null;
+    setDefinition((prev) => {
+      nextDefinition = updater(prev);
+      return nextDefinition;
+    });
+
+    if (broadcastPath && nextDefinition) {
+      broadcastPatch(
+        String(broadcastPath),
+        nextDefinition[broadcastPath],
+      );
+    }
+  }, [broadcastPatch]);
+
+  const handleFieldChange = useCallback(<K extends keyof LootTableDefinition>(key: K, value: LootTableDefinition[K]) => {
+    applyDefinitionUpdate((prev) => ({ ...prev, [key]: value }), key);
+  }, [applyDefinitionUpdate]);
+
+  const getIdleSnapshotLabel = useCallback(
+    () => `Auto-save [${new Date().toLocaleString()}]`,
+    [],
+  );
+
   const autosave = useAutosave({
     key: `loot-table:${tableId}`,
-    version: definition.version,
     value: definition,
     onSave: async ({ value }) => {
       setError(null);
@@ -342,8 +398,21 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
       }
       const nextDefinition = { ...value, version: result.version, updated_at: result.updated_at };
       setDefinition(nextDefinition);
-      return { value: nextDefinition, version: result.version };
+      return { value: nextDefinition };
     },
+    onCreateSnapshot: async (label) => {
+      setError(null);
+      const result = await createSnapshotAction(tableId, label);
+      if (!result.ok) {
+        setError(result.error ?? 'Unable to create snapshot');
+        throw new Error(result.error ?? 'Unable to create snapshot');
+      }
+      setDefinition(result.definition);
+      broadcastPatch('version', result.definition.version);
+      broadcastPatch('updated_at', result.definition.updated_at);
+      return { value: result.definition };
+    },
+    getIdleSnapshotLabel,
   });
 
   useEffect(() => {
@@ -362,10 +431,6 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
     }
   }, [availableGuaranteedItems, selectedGuaranteedItemId]);
 
-  const handleFieldChange = <K extends keyof LootTableDefinition>(key: K, value: LootTableDefinition[K]) => {
-    setDefinition((prev) => ({ ...prev, [key]: value }));
-  };
-
   const handleRollStrategyChange = (strategy: RollStrategyState) => {
     handleFieldChange('rollStrategy', strategy);
   };
@@ -383,7 +448,10 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
   };
 
   const setAwardStrategy = (updater: (prev: AwardStrategyState) => AwardStrategyState) => {
-    setDefinition((prev) => ({ ...prev, awardStrategy: updater(prev.awardStrategy) }));
+    applyDefinitionUpdate(
+      (prev) => ({ ...prev, awardStrategy: updater(prev.awardStrategy) }),
+      'awardStrategy',
+    );
   };
 
   const handleAwardStrategySelection = (type: AwardStrategyState['type']) => {
@@ -432,17 +500,17 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
   };
 
   const handleEntryChange = (id: string, changes: Record<string, unknown>) => {
-    setDefinition((prev) => ({
+    applyDefinitionUpdate((prev) => ({
       ...prev,
       entries: prev.entries.map((entry) => (entry.id === id ? { ...entry, ...changes } as LootEntry : entry)),
-    }));
+    }), 'entries');
   };
 
   const handleGuaranteedChange = (id: string, changes: Record<string, unknown>) => {
-    setDefinition((prev) => ({
+    applyDefinitionUpdate((prev) => ({
       ...prev,
       guaranteed: prev.guaranteed.map((entry) => (entry.id === id ? { ...entry, ...changes } as LootEntry : entry)),
-    }));
+    }), 'guaranteed');
   };
 
   const addEntry = (target: 'entries' | 'guaranteed') => {
@@ -485,19 +553,54 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
       return;
     }
 
-    setDefinition((prev) => ({
+    applyDefinitionUpdate((prev) => ({
       ...prev,
       [target]: [newEntry, ...(target === 'entries' ? prev.entries : prev.guaranteed)],
-    }));
+    }), target);
     addNotification(successMessage, 'success');
   };
 
   const removeEntry = (id: string, target: 'entries' | 'guaranteed') => {
-    setDefinition((prev) => ({
+    applyDefinitionUpdate((prev) => ({
       ...prev,
       [target]: prev[target].filter((entry) => entry.id !== id),
-    }));
+    }), target);
   };
+
+  const resolveFocusedField = useCallback((target: EventTarget | null) => {
+    if (!(target instanceof HTMLElement)) {
+      return null;
+    }
+
+    const fieldElement = target.closest<HTMLElement>('[data-field-id]');
+    if (fieldElement?.dataset.fieldId) {
+      return fieldElement.dataset.fieldId;
+    }
+
+    if (target.id) {
+      return target.id;
+    }
+
+    return null;
+  }, []);
+
+  const handleFocusCapture = useCallback((event: FocusEvent<HTMLDivElement>) => {
+    const fieldId = resolveFocusedField(event.target);
+    if (fieldId) {
+      trackFocus(fieldId);
+    }
+  }, [resolveFocusedField, trackFocus]);
+
+  const handleBlurCapture = useCallback((event: FocusEvent<HTMLDivElement>) => {
+    const currentFieldId = resolveFocusedField(event.target);
+    const nextFieldId = resolveFocusedField(event.relatedTarget);
+
+    if (!currentFieldId || currentFieldId !== nextFieldId) {
+      untrackFocus();
+    }
+
+    autosave.handleBlur();
+  }, [autosave, resolveFocusedField, untrackFocus]);
 
   const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -511,12 +614,20 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
         setError('Unable to import loot table. Ensure it matches the expected schema.');
         return;
       }
-      setDefinition((prev) => ({
+      applyDefinitionUpdate((prev) => ({
         ...parsed.data,
         id: prev.id,
         version: prev.version,
         updated_at: new Date().toISOString(),
-      }));
+      }), 'name');
+      broadcastPatch('description', parsed.data.description ?? '');
+      broadcastPatch('notes', parsed.data.notes ?? '');
+      broadcastPatch('entries', parsed.data.entries);
+      broadcastPatch('guaranteed', parsed.data.guaranteed);
+      broadcastPatch('rollStrategy', parsed.data.rollStrategy);
+      broadcastPatch('weightDistribution', parsed.data.weightDistribution);
+      broadcastPatch('replacementStrategy', parsed.data.replacementStrategy);
+      broadcastPatch('awardStrategy', parsed.data.awardStrategy);
       addNotification(`Imported ${parsed.data.name}. Review and save to persist.`, 'success');
       setError(null);
     } catch (importError) {
@@ -540,30 +651,6 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
     URL.revokeObjectURL(url);
   };
 
-  const handleManualSave = () => {
-    startSaving(() => {
-      void autosave.saveNow();
-    });
-  };
-
-  const handleDuplicate = () => {
-    startDuplicating(() => {
-      duplicateLootTableAction({ tableId })
-        .then((result) => {
-          if (!result?.ok) {
-            setError(result?.error ?? 'Unable to duplicate loot table.');
-            return;
-          }
-          addNotification('Loot table duplicated successfully', 'success');
-          router.push(`/loot-tables/${result.id}`);
-        })
-        .catch((error) => {
-          console.error('Duplicate action failed', error);
-          setError('Unable to duplicate loot table.');
-        });
-    });
-  };
-
   const handleDelete = () => {
     if (!confirm('Are you sure you want to delete this loot table? This action cannot be undone.')) {
       return;
@@ -585,21 +672,16 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card px-6 py-4">
+    <div className="space-y-6" onFocusCapture={handleFocusCapture} onBlurCapture={handleBlurCapture}>
+      <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card/95 px-6 py-4 backdrop-blur-sm">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold text-white">{definition.name}</h1>
           <p className="text-sm text-foreground/60">
-            Version {definition.version} · Last updated {new Date(definition.updated_at).toLocaleString()}
+            {`Version ${definition.version} · Last updated ${new Date(definition.updated_at).toLocaleString()}`}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <SaveIndicator status={isSaving ? 'saving' : autosave.status} />
-          <Button type="button" variant="outline" className="gap-2" asChild>
-            <Link href={`/loot-tables/${tableId}/simulate`}>
-              <Wand2 className="h-4 w-4" /> Run simulation
-            </Link>
-          </Button>
+          <SaveIndicator status={autosave.status} />
           <Button
             type="button"
             variant="ghost"
@@ -616,9 +698,6 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
           >
             <Share2 className="h-4 w-4" /> Share link
           </Button>
-          <Button type="button" variant="outline" className="gap-2" onClick={handleManualSave} disabled={isSaving}>
-            Save now
-          </Button>
           <Button type="button" className="gap-2" onClick={handleExport}>
             <Download className="h-4 w-4" /> Export JSON
           </Button>
@@ -626,15 +705,6 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
             <Upload className="h-4 w-4" /> Import JSON
             <input type="file" accept="application/json" className="hidden" onChange={handleImport} />
           </label>
-          <Button
-            type="button"
-            variant="outline"
-            className="gap-2"
-            onClick={handleDuplicate}
-            disabled={isDuplicating}
-          >
-            <Copy className="h-4 w-4" /> {isDuplicating ? 'Duplicating...' : 'Duplicate'}
-          </Button>
           <Button
             type="button"
             variant="destructive"
@@ -663,41 +733,44 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                   Name and description help other designers understand the loot table at a glance.
                 </CardDescription>
               </div>
-              <Badge variant="info">Hybrid autosave</Badge>
+              <Badge variant="info">Live autosave</Badge>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="name">Name</Label>
-                <Input
-                  id="name"
-                  value={definition.name}
-                  onChange={(event) => handleFieldChange('name', event.target.value)}
-                  onBlur={autosave.handleBlur}
-                />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  rows={3}
-                  value={definition.description ?? ''}
-                  onChange={(event) => handleFieldChange('description', event.target.value)}
-                  onBlur={autosave.handleBlur}
-                />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="notes">Designer notes</Label>
-                <Textarea
-                  id="notes"
-                  rows={4}
-                  value={definition.notes ?? ''}
-                  onChange={(event) => handleFieldChange('notes', event.target.value)}
-                  onBlur={autosave.handleBlur}
-                />
-                <p className="text-xs text-foreground/50">
-                  Notes are stored alongside the table and never exported to the live game.
-                </p>
-              </div>
+              <PresenceField fieldId="name" presence={others} className="sm:col-span-2">
+                <div className="space-y-2" data-field-id="name">
+                  <Label htmlFor="name">Name</Label>
+                  <Input
+                    id="name"
+                    value={definition.name}
+                    onChange={(event) => handleFieldChange('name', event.target.value)}
+                  />
+                </div>
+              </PresenceField>
+              <PresenceField fieldId="description" presence={others} className="sm:col-span-2">
+                <div className="space-y-2" data-field-id="description">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    rows={3}
+                    value={definition.description ?? ''}
+                    onChange={(event) => handleFieldChange('description', event.target.value)}
+                  />
+                </div>
+              </PresenceField>
+              <PresenceField fieldId="notes" presence={others} className="sm:col-span-2">
+                <div className="space-y-2" data-field-id="notes">
+                  <Label htmlFor="notes">Designer notes</Label>
+                  <Textarea
+                    id="notes"
+                    rows={4}
+                    value={definition.notes ?? ''}
+                    onChange={(event) => handleFieldChange('notes', event.target.value)}
+                  />
+                  <p className="text-xs text-foreground/50">
+                    Notes are stored alongside the table and never exported to the live game.
+                  </p>
+                </div>
+              </PresenceField>
             </CardContent>
           </Card>
 
@@ -728,7 +801,8 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 </div>
               </section>
 
-              <section className="space-y-4">
+              <PresenceField fieldId="awardStrategy" presence={others}>
+                <section className="space-y-4" data-field-id="awardStrategy">
                 <div className="space-y-2">
                   <Label>Award strategy</Label>
                   <p className="text-xs text-foreground/60">
@@ -886,8 +960,10 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                   </div>
                 )}
               </section>
+              </PresenceField>
 
-              <section className="space-y-4">
+              <PresenceField fieldId="rollStrategy" presence={others}>
+                <section className="space-y-4" data-field-id="rollStrategy">
                 <Label>Roll count function</Label>
                 <p className="text-xs text-foreground/60">
                   Choose how many weighted pulls occur in each run: constant amounts, progressive ramps, or random ranges.
@@ -1051,8 +1127,10 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                   </div>
                 )}
               </section>
+              </PresenceField>
 
-              <section className="space-y-4">
+              <PresenceField fieldId="weightDistribution" presence={others}>
+                <section className="space-y-4" data-field-id="weightDistribution">
                 <Label>Weight distribution strategy</Label>
                 <p className="text-xs text-foreground/60">
                   Static keeps base odds, Pity boosts unlucky entries after repeated misses, and Progressive nudges all weights towards the average every roll.
@@ -1082,10 +1160,10 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                           <Select
                             value={rule.entryId}
                             onValueChange={(entryId) => {
-                              setDefinition((prev) => ({
+                              applyDefinitionUpdate((prev) => ({
                                 ...prev,
                                 pityRules: prev.pityRules.map((r, i) => (i === index ? { ...r, entryId } : r)),
-                              }));
+                              }), 'pityRules');
                             }}
                           >
                             <SelectTrigger>
@@ -1108,10 +1186,10 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                             value={rule.maxAttempts}
                             onChange={(event) => {
                               const maxAttempts = Number(event.target.value) || 1;
-                              setDefinition((prev) => ({
+                              applyDefinitionUpdate((prev) => ({
                                 ...prev,
                                 pityRules: prev.pityRules.map((r, i) => (i === index ? { ...r, maxAttempts } : r)),
-                              }));
+                              }), 'pityRules');
                             }}
                             onBlur={autosave.handleBlur}
                           />
@@ -1124,10 +1202,10 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                             value={rule.weightIncrement}
                             onChange={(event) => {
                               const weightIncrement = Number(event.target.value) || 0;
-                              setDefinition((prev) => ({
+                              applyDefinitionUpdate((prev) => ({
                                 ...prev,
                                 pityRules: prev.pityRules.map((r, i) => (i === index ? { ...r, weightIncrement } : r)),
-                              }));
+                              }), 'pityRules');
                             }}
                             onBlur={autosave.handleBlur}
                           />
@@ -1139,10 +1217,10 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                             size="sm"
                             className="w-full sm:w-auto"
                             onClick={() =>
-                              setDefinition((prev) => ({
+                              applyDefinitionUpdate((prev) => ({
                                 ...prev,
                                 pityRules: prev.pityRules.filter((_, i) => i !== index),
-                              }))
+                              }), 'pityRules')
                             }
                           >
                             <Trash2 className="mr-2 h-4 w-4" /> Remove rule
@@ -1155,7 +1233,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                       variant="outline"
                       className="gap-2"
                       onClick={() =>
-                        setDefinition((prev) => ({
+                        applyDefinitionUpdate((prev) => ({
                           ...prev,
                           pityRules: [
                             ...prev.pityRules,
@@ -1165,7 +1243,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                               weightIncrement: 1,
                             },
                           ].filter((rule) => rule.entryId),
-                        }))
+                        }), 'pityRules')
                       }
                       disabled={definition.entries.length === 0}
                     >
@@ -1188,15 +1266,15 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                         value={definition.progressive?.maxShift ?? 0}
                         onChange={(event) => {
                           const maxShift = Number(event.target.value) || 0;
-                          setDefinition((prev) => ({
+                          applyDefinitionUpdate((prev) => ({
                             ...prev,
-                            progressive: { 
-                              shiftFactor: 0, 
+                            progressive: {
+                              shiftFactor: 0,
                               varianceScaling: false,
-                              ...prev.progressive, 
-                              maxShift 
+                              ...prev.progressive,
+                              maxShift
                             },
-                          }));
+                          }), 'progressive');
                         }}
                         onBlur={autosave.handleBlur}
                       />
@@ -1210,15 +1288,15 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                         value={definition.progressive?.shiftFactor ?? 0}
                         onChange={(event) => {
                           const shiftFactor = Number(event.target.value) || 0;
-                          setDefinition((prev) => ({
+                          applyDefinitionUpdate((prev) => ({
                             ...prev,
-                            progressive: { 
-                              maxShift: 0, 
+                            progressive: {
+                              maxShift: 0,
                               varianceScaling: false,
-                              ...prev.progressive, 
-                              shiftFactor 
+                              ...prev.progressive,
+                              shiftFactor
                             },
-                          }));
+                          }), 'progressive');
                         }}
                         onBlur={autosave.handleBlur}
                       />
@@ -1229,15 +1307,15 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                         value={definition.progressive?.varianceScaling ? 'true' : 'false'}
                         onValueChange={(value) => {
                           const varianceScaling = value === 'true';
-                          setDefinition((prev) => ({
+                          applyDefinitionUpdate((prev) => ({
                             ...prev,
-                            progressive: { 
-                              maxShift: 0, 
-                              shiftFactor: 0, 
-                              ...prev.progressive, 
-                              varianceScaling 
+                            progressive: {
+                              maxShift: 0,
+                              shiftFactor: 0,
+                              ...prev.progressive,
+                              varianceScaling
                             },
-                          }));
+                          }), 'progressive');
                         }}
                       >
                         <SelectTrigger>
@@ -1253,6 +1331,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 </div>
               )}
               </section>
+              </PresenceField>
             </CardContent>
           </Card>
 
@@ -1332,6 +1411,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
               {definition.guaranteed.map((entry) => {
                 const label = getLootEntryLabel(entry, items);
                 const { label: badgeLabel, variant: badgeVariant, className: badgeClassName } = getEntryBadgeConfig(entry.type);
+                const isCollapsed = collapsedEntries.has(entry.id);
                 return (
                   <div key={entry.id} className="space-y-3 rounded-md border bg-muted/30 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1341,10 +1421,16 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                           {badgeLabel}
                         </Badge>
                       </div>
-                      <Button type="button" variant="ghost" size="icon" onClick={() => removeEntry(entry.id, 'guaranteed')}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button type="button" variant="ghost" size="icon" onClick={() => toggleEntryCollapse(entry.id)} aria-label={isCollapsed ? 'Expand entry' : 'Collapse entry'}>
+                          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </Button>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => removeEntry(entry.id, 'guaranteed')}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
+                    {!isCollapsed && (<>
                     <div className="grid gap-3 sm:grid-cols-4">
                       <div className="space-y-1">
                         <Label>Weight</Label>
@@ -1461,6 +1547,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                         </div>
                       </div>
                     )}
+                    </>)}
                   </div>
                 );
               })}
@@ -1552,6 +1639,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 const { label: badgeLabel, variant: badgeVariant, className: badgeClassName } = getEntryBadgeConfig(entry.type);
                 const probability = probabilities[entry.id] ?? 0;
                 const replacement = getReplacement(entry, definition.replacementStrategy);
+                const isCollapsed = collapsedEntries.has(entry.id);
                 return (
                   <div key={entry.id} className="space-y-3 rounded-md border bg-muted/30 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1563,11 +1651,18 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                       </div>
                       <div className="flex items-center gap-2">
                         <Badge variant="info">{(probability * 100).toFixed(2)}%</Badge>
+                        <Button type="button" variant="ghost" size="icon" onClick={() => toggleEntryCollapse(entry.id)} aria-label={isCollapsed ? 'Expand entry' : 'Collapse entry'}>
+                          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </Button>
                         <Button type="button" variant="ghost" size="icon" onClick={() => removeEntry(entry.id, 'entries')}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
+                    <div className="h-1 overflow-hidden rounded-full bg-muted/50">
+                      <div className="h-full rounded-full bg-primary/50 transition-all duration-300" style={{ width: `${Math.min(probability * 100, 100)}%` }} />
+                    </div>
+                    {!isCollapsed && (<>
                     <div className="grid gap-3 sm:grid-cols-4">
                       <div className="space-y-1">
                         <Label>Weight</Label>
@@ -1690,6 +1785,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                         </div>
                       </div>
                     )}
+                    </>)}
                   </div>
                 );
               })}
@@ -1719,7 +1815,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
               </div>
               <div className="rounded-md border bg-muted/30 p-4 text-xs text-foreground/60">
                 <p>
-                  Autosave logs every change locally and syncs to Supabase on blur, pause, and safety intervals. Conflict resolution alerts will appear here if another editor publishes a newer version.
+                  Autosave writes directly to Supabase on blur, pause, and safety intervals. Snapshots advance the table version, and remote field edits resolve with last-writer-wins semantics.
                 </p>
               </div>
             </CardContent>
@@ -1783,6 +1879,19 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
           </div>
         ))}
       </div>
+
+      {/* Floating Run Simulation button */}
+      <Link
+        href={`/loot-tables/${tableId}/simulate`}
+        className="group fixed bottom-6 right-6 z-50 flex items-center overflow-hidden rounded-xl bg-blue-600 shadow-lg shadow-blue-900/40 transition-all duration-150 ease-out hover:shadow-xl hover:shadow-blue-900/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+      >
+        <span className="flex max-w-0 items-center overflow-hidden whitespace-nowrap pl-0 text-sm font-medium text-white transition-all duration-150 ease-out group-hover:max-w-[8rem] group-hover:pl-4">
+          Run simulation
+        </span>
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center">
+          <Wand2 className="h-5 w-5 text-white" />
+        </span>
+      </Link>
     </div>
   );
 }

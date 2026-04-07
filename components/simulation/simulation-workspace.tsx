@@ -11,10 +11,30 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
+  LootEntry,
   LootTableDefinition,
   SimulationResult,
   SimulationTimelineEventType,
 } from '@/lib/loot-tables/types';
+
+function computeAvgRolls(rollStrategy: LootTableDefinition['rollStrategy']): number {
+  if (rollStrategy.type === 'CONSTANT') return rollStrategy.rolls;
+  if (rollStrategy.type === 'RANDOM') return (rollStrategy.min + rollStrategy.max) / 2;
+  if (rollStrategy.type === 'PROGRESSIVE') return (rollStrategy.baseRolls + rollStrategy.maxRolls) / 2;
+  return 1;
+}
+
+function getEntryAvgQty(entry: LootEntry): number {
+  if (entry.type === 'dropped_item' || entry.type === 'given_item') return (entry.minYield + entry.maxYield) / 2;
+  if (
+    entry.type === 'dropped_coin' ||
+    entry.type === 'given_coin' ||
+    entry.type === 'dropped_clan_energy' ||
+    entry.type === 'given_clan_energy'
+  ) return (entry.minAmount + entry.maxAmount) / 2;
+  if (entry.type === 'clan_experience') return (entry.minXp + entry.maxXp) / 2;
+  return 1;
+}
 import type { Database } from '@/supabase/types';
 
 interface SimulationWorkspaceProps {
@@ -128,13 +148,22 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
 
   const tableRows = useMemo(() => {
     if (!result) return [];
+    const avgRolls = computeAvgRolls(definition.rollStrategy);
+    const allDefEntries = [...definition.entries, ...definition.guaranteed];
     const rows = result.entries.map((entry) => {
       const baseProbability = probabilities[entry.entryId] ?? 0;
       const item = items.find((candidate) => candidate.id === entry.itemId);
+      const defEntry = allDefEntries.find((e) => e.id === entry.entryId);
+      const avgQty = defEntry ? getEntryAvgQty(defEntry) : 1;
+      const expectedValue = entry.source === 'guaranteed'
+        ? avgQty
+        : baseProbability * avgQty * avgRolls;
       return {
         ...entry,
         baseProbability,
         name: item?.name ?? entry.entryId,
+        expectedValue,
+        avgQty,
       };
     });
 
@@ -346,13 +375,14 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
                   <th className="px-3 py-2 text-right">Bundle hits</th>
                   <th className="px-3 py-2 text-right">Sim %</th>
                   <th className="px-3 py-2 text-right">Base %</th>
+                  <th className="px-3 py-2 text-right" title="Expected quantity per run (probability × avg qty × avg rolls)">EV/run</th>
                   <th className="px-3 py-2 text-right">First</th>
                 </tr>
               </thead>
               <tbody>
                 {tableRows.length === 0 && (
                   <tr>
-                    <td className="px-4 py-6 text-center text-foreground/50" colSpan={9}>
+                    <td className="px-4 py-6 text-center text-foreground/50" colSpan={10}>
                       Run the simulation to populate this table.
                     </td>
                   </tr>
@@ -377,6 +407,9 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
                     <td className="px-3 py-2 text-right">{entry.bundleHits.toLocaleString()}</td>
                     <td className="px-3 py-2 text-right">{(entry.probability * 100).toFixed(2)}%</td>
                     <td className="px-3 py-2 text-right">{(entry.baseProbability * 100).toFixed(2)}%</td>
+                    <td className="px-3 py-2 text-right text-foreground/70" title={`${entry.source === 'guaranteed' ? 'Guaranteed' : `${(entry.baseProbability * 100).toFixed(2)}% × `}avg qty ${entry.avgQty.toFixed(2)}`}>
+                      {entry.expectedValue.toFixed(3)}
+                    </td>
                     <td className="px-3 py-2 text-right text-xs">
                       {entry.firstAppearedAt ? `#${entry.firstAppearedAt}` : 'Never'}
                     </td>
@@ -419,6 +452,18 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
                   <span className="text-foreground/60">Variance:</span>
                   <span className="text-foreground/90 font-semibold">
                     {((selectedRow.probability - selectedRow.baseProbability) * 100).toFixed(3)}%
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-foreground/60">Avg Qty per Selection:</span>
+                  <span className="text-foreground/90 font-semibold">{selectedRow.avgQty.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between col-span-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
+                  <span className="text-foreground/70 font-medium">Expected Value / run</span>
+                  <span className="text-white font-semibold">
+                    {selectedRow.source === 'guaranteed'
+                      ? `${selectedRow.expectedValue.toFixed(3)} (always)`
+                      : `${selectedRow.expectedValue.toFixed(3)}`}
                   </span>
                 </div>
                 <div className="flex justify-between">

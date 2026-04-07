@@ -3,77 +3,118 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface AutosaveOptions<T> {
-  key: string;
-  version: number;
+  key?: string;
+  version?: number;
   value: T;
-  onSave: (payload: { value: T; version: number }) => Promise<{ value?: T; version?: number } | void> |
-    { value?: T; version?: number } | void;
+  onSave: (payload: { value: T }) => Promise<{ value?: T } | void> | { value?: T } | void;
+  onCreateSnapshot?: (label?: string) => Promise<{ value?: T } | void> | { value?: T } | void;
   debounceMs?: number;
+  idleSnapshotMs?: number;
+  getIdleSnapshotLabel?: () => string;
 }
 
 type AutosaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
-export function useAutosave<T>({ key, version, value, onSave, debounceMs = 1000 }: AutosaveOptions<T>) {
+export function useAutosave<T>({
+  value,
+  onSave,
+  onCreateSnapshot,
+  debounceMs = 1000,
+  idleSnapshotMs = 30 * 60 * 1000,
+  getIdleSnapshotLabel,
+}: AutosaveOptions<T>) {
   const [status, setStatus] = useState<AutosaveStatus>('idle');
   const [dirty, setDirty] = useState(false);
-  const lastSavedRef = useRef<{ value: T; version: number } | null>(null);
+  const lastSavedRef = useRef<T | null>(null);
   const debounceRef = useRef<NodeJS.Timeout>();
   const intervalRef = useRef<NodeJS.Timeout>();
+  const idleSnapshotRef = useRef<NodeJS.Timeout>();
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const draftKey = `${key}:v${version}`;
-    window.localStorage.setItem(draftKey, JSON.stringify(value));
-    const lastSaved = lastSavedRef.current;
-    if (lastSaved && lastSaved.version === version && lastSaved.value === value) {
-      setDirty(false);
-    } else {
-      setDirty(true);
-    }
-  }, [key, version, value]);
+    setDirty(lastSavedRef.current !== value);
+  }, [value]);
+
+  const markClean = useCallback((nextValue: T) => {
+    lastSavedRef.current = nextValue;
+    setDirty(false);
+    setStatus('saved');
+  }, []);
 
   const performSave = useCallback(async () => {
-    if (!dirty) return;
+    if (!dirty) {
+      return;
+    }
+
     setStatus('saving');
     try {
-      const result = await onSave({ value, version });
-      if (result && result.value) {
-        lastSavedRef.current = { value: result.value, version: result.version ?? version };
-      } else {
-        lastSavedRef.current = { value, version: result?.version ?? version };
-      }
-      setStatus('saved');
-      setDirty(false);
+      const result = await onSave({ value });
+      markClean(result?.value ?? value);
     } catch (error) {
       console.error('Autosave failed', error);
       setStatus('error');
     }
-  }, [dirty, onSave, value, version]);
+  }, [dirty, markClean, onSave, value]);
+
+  const createSnapshot = useCallback(async (label?: string) => {
+    if (!onCreateSnapshot) {
+      return;
+    }
+
+    setStatus('saving');
+    try {
+      const result = await onCreateSnapshot(label);
+      markClean(result?.value ?? value);
+    } catch (error) {
+      console.error('Snapshot creation failed', error);
+      setStatus('error');
+      throw error;
+    }
+  }, [markClean, onCreateSnapshot, value]);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       void performSave();
     }, debounceMs);
+
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [debounceMs, performSave, value, version]);
+  }, [debounceMs, performSave, value]);
 
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       void performSave();
     }, 15000);
+
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [performSave]);
 
   useEffect(() => {
+    if (typeof window === 'undefined' || !onCreateSnapshot) {
+      return;
+    }
+
+    if (idleSnapshotRef.current) clearTimeout(idleSnapshotRef.current);
+    idleSnapshotRef.current = setTimeout(() => {
+      const label = getIdleSnapshotLabel?.() ?? `Auto-save ${new Date().toLocaleString()}`;
+      void createSnapshot(label);
+    }, idleSnapshotMs);
+
+    return () => {
+      if (idleSnapshotRef.current) clearTimeout(idleSnapshotRef.current);
+    };
+  }, [createSnapshot, getIdleSnapshotLabel, idleSnapshotMs, onCreateSnapshot, value]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
+
     const handleBeforeUnload = () => {
       void performSave();
     };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [performSave]);
@@ -82,18 +123,13 @@ export function useAutosave<T>({ key, version, value, onSave, debounceMs = 1000 
     void performSave();
   }, [performSave]);
 
-  const markClean = useCallback((payload: { value: T; version: number }) => {
-    lastSavedRef.current = payload;
-    setDirty(false);
-    setStatus('saved');
-  }, []);
-
   return {
     status,
     dirty,
     lastSaved: lastSavedRef.current,
     handleBlur,
     saveNow: performSave,
+    createSnapshot,
     markClean,
   } as const;
 }

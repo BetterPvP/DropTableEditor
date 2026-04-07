@@ -13,11 +13,14 @@ export const dynamic = 'force-dynamic';
 
 export default async function LootTableEditorPage({ params }: LootTableEditorPageProps) {
   const supabase = createServerSupabaseClient();
-  const { data: table, error } = await supabase
-    .from('loot_tables')
-    .select('id, name, description, version, updated_at, definition, metadata')
-    .eq('id', params.id)
-    .maybeSingle();
+  const [{ data: table, error }, { data: auth }] = await Promise.all([
+    supabase
+      .from('loot_tables')
+      .select('id, name, description, version, updated_at, definition, metadata')
+      .eq('id', params.id)
+      .maybeSingle(),
+    supabase.auth.getUser(),
+  ]);
 
   if (error) {
     console.error('Failed to load loot table', error);
@@ -62,12 +65,24 @@ export default async function LootTableEditorPage({ params }: LootTableEditorPag
     console.error('Failed to load items for editor', itemsError);
   }
 
+  const user = auth.user;
+  const userId = user?.id ?? '00000000-0000-0000-0000-000000000000';
+  const displayName =
+    user?.user_metadata?.full_name ??
+    user?.user_metadata?.name ??
+    user?.email?.split('@')[0] ??
+    'Anonymous';
+  const color = `hsl(${parseInt(userId.slice(0, 8), 16) % 360}, 70%, 55%)`;
+
   return (
     <LootTableEditor
       tableId={table.id}
       definition={{ ...definition, version: table.version, updated_at: table.updated_at }}
       metadata={typeof table.metadata === 'object' ? (table.metadata as Record<string, unknown>) : null}
       items={itemsData}
+      userId={userId}
+      displayName={displayName}
+      color={color}
     />
   );
 }
