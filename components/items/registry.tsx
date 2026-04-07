@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Trash2 } from 'lucide-react';
+import { Check, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -10,10 +10,11 @@ import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { deleteItemsAction, registerItemsAction } from '@/app/(dashboard)/settings/actions';
+import { deleteItemsAction, registerItemsAction, renameItemAction, renameItemsAction } from '@/app/(dashboard)/settings/actions';
+import { previewRegexRename, validateItemRenames } from '@/lib/items/rename';
 import { createBrowserSupabaseClient } from '@/supabase/client';
 import type { Database } from '@/supabase/types';
-import { DEFAULT_ITEMS_PAGE_SIZE, fetchItemsPage } from '@/lib/items/queries';
+import { DEFAULT_ITEMS_PAGE_SIZE, fetchAllItems, fetchItemsPage } from '@/lib/items/queries';
 
 interface ItemRegistryProps {
   initialItems: Database['public']['Tables']['items']['Row'][];
@@ -56,6 +57,14 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
   const [deleteFeedback, setDeleteFeedback] = useState<string | null>(null);
   const [deletingItems, startDeletingItems] = useTransition();
 
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [singleRenameValue, setSingleRenameValue] = useState('');
+  const [regexReplaceValue, setRegexReplaceValue] = useState('');
+  const [renameError, setRenameError] = useState<string | null>(null);
+  const [renameFeedback, setRenameFeedback] = useState<string | null>(null);
+  const [renamingItems, startRenamingItems] = useTransition();
+  const [allItemIds, setAllItemIds] = useState<string[]>(() => initialItems.map((item) => item.id));
+
   const [listError, setListError] = useState<string | null>(null);
   const [isLoadingPage, setIsLoadingPage] = useState(false);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -66,6 +75,7 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
   const someVisibleSelected = !allVisibleSelected && visibleIds.some((id) => selectedIds.includes(id));
   const isEmpty = items.length === 0;
   const isSearching = itemSearch.trim().length > 0;
+  const knownItemIds = allItemIds.length > 0 ? allItemIds : items.map((item) => item.id);
 
   useEffect(() => {
     if (headerCheckboxRef.current) {
@@ -77,7 +87,17 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
     setItems(initialItems);
     setTotalCount(initialTotalCount);
     setHasMore(initialItems.length < initialTotalCount);
+    setAllItemIds((previous) => (previous.length > 0 ? previous : initialItems.map((item) => item.id)));
   }, [initialItems, initialTotalCount]);
+
+  const refreshAllItemIds = useCallback(async () => {
+    try {
+      const allItems = await fetchAllItems(supabase, { sortBy: 'id', sortDir: 'asc' });
+      setAllItemIds(allItems.map((item) => item.id));
+    } catch (error) {
+      console.error('Failed to refresh item IDs', error);
+    }
+  }, [supabase]);
 
   const fetchPage = useCallback(
     async (from: number, search: string, nextSortOrder: SortOrder) =>
@@ -117,6 +137,13 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
       }
     },
     [fetchPage],
+  );
+
+  const refreshRegistryData = useCallback(
+    async (search: string, nextSortOrder: SortOrder) => {
+      await Promise.all([refreshList(search, nextSortOrder), refreshAllItemIds()]);
+    },
+    [refreshAllItemIds, refreshList],
   );
 
   const loadMoreItems = useCallback(async () => {
@@ -171,6 +198,7 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
   useEffect(() => {
     if (initialLoadRef.current) {
       initialLoadRef.current = false;
+      void refreshAllItemIds();
       return;
     }
 
@@ -179,27 +207,66 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
     }, 250);
 
     return () => window.clearTimeout(timeout);
-  }, [itemSearch, refreshList, regexSearchEnabled, sortOrder]);
+  }, [itemSearch, refreshAllItemIds, refreshList, regexSearchEnabled, sortOrder]);
+
+  const batchRenamePreview = useMemo(() => {
+    if (selectedIds.length === 0) {
+      return { error: null as string | null, renames: [], changedCount: 0 };
+    }
+
+    if (!regexSearchEnabled) {
+      return { error: 'Enable regex search to batch rename the selected items.', renames: [], changedCount: 0 };
+    }
+
+    if (!itemSearch.trim()) {
+      return { error: 'Enter a find regex in Search to batch rename the selected items.', renames: [], changedCount: 0 };
+    }
+
+    try {
+      const preview = previewRegexRename(
+        selectedIds,
+        itemSearch,
+        regexReplaceValue,
+      );
+      const validation = validateItemRenames(knownItemIds, preview.renames);
+
+      if (!validation.ok) {
+        return { error: validation.error, renames: [], changedCount: preview.changedCount };
+      }
+
+      return { error: null as string | null, renames: validation.renames, changedCount: preview.changedCount };
+    } catch (error) {
+      return {
+        error: error instanceof Error ? error.message : 'Invalid regex pattern.',
+        renames: [],
+        changedCount: 0,
+      };
+    }
+  }, [itemSearch, knownItemIds, regexReplaceValue, regexSearchEnabled, selectedIds]);
 
   const handleSearchChange = (value: string) => {
     setItemSearch(value);
-    setSelectedIds([]);
     setDeleteError(null);
     setDeleteFeedback(null);
+    setRenameError(null);
+    setRenameFeedback(null);
   };
 
   const handleRegexToggle = (checked: boolean) => {
     setRegexSearchEnabled(checked);
-    setSelectedIds([]);
     setDeleteError(null);
     setDeleteFeedback(null);
     setListError(null);
+    setRenameError(null);
+    setRenameFeedback(null);
   };
 
   const toggleSelected = (id: string, checked: boolean) => {
     setSelectedIds((previous) =>
       checked ? Array.from(new Set([...previous, id])) : previous.filter((selectedId) => selectedId !== id),
     );
+    setRenameError(null);
+    setRenameFeedback(null);
   };
 
   const toggleSelectAllVisible = (checked: boolean) => {
@@ -210,6 +277,8 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
 
       return Array.from(new Set([...previous, ...visibleIds]));
     });
+    setRenameError(null);
+    setRenameFeedback(null);
   };
 
   const handleRegisterItems = async () => {
@@ -242,7 +311,7 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
 
       setRegisterFeedback(`${response.registeredCount} registered / ${response.errorCount} errors`);
       setRegistrationInput('');
-      await refreshList(itemSearch, sortOrder);
+      await refreshRegistryData(itemSearch, sortOrder);
       router.refresh();
     });
   };
@@ -271,7 +340,104 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
 
       setDeleteFeedback(`Deleted ${response.deletedCount} item${response.deletedCount === 1 ? '' : 's'}.`);
       setSelectedIds([]);
-      await refreshList(itemSearch, sortOrder);
+      await refreshRegistryData(itemSearch, sortOrder);
+      router.refresh();
+    });
+  };
+
+  const startInlineRename = (item: ItemRow) => {
+    setEditingItemId(item.id);
+    setSingleRenameValue(item.id);
+    setRenameError(null);
+    setRenameFeedback(null);
+  };
+
+  const cancelInlineRename = () => {
+    setEditingItemId(null);
+    setSingleRenameValue('');
+  };
+
+  const resetRenameView = useCallback(() => {
+    setItemSearch('');
+    setRegexSearchEnabled(false);
+    setSelectedIds([]);
+  }, []);
+
+  const handleSingleRename = (item: ItemRow) => {
+    const nextId = singleRenameValue.trim();
+    const validation = validateItemRenames(knownItemIds, [{ from: item.id, to: nextId }]);
+
+    if (!validation.ok) {
+      setRenameError(validation.error);
+      setRenameFeedback(null);
+      return;
+    }
+
+    if (validation.renames.length === 0) {
+      cancelInlineRename();
+      return;
+    }
+
+    setRenameError(null);
+    setRenameFeedback(null);
+    setDeleteError(null);
+    setDeleteFeedback(null);
+    setRegisterError(null);
+    setRegisterFeedback(null);
+
+    startRenamingItems(async () => {
+      const response = await renameItemAction({ from: item.id, to: nextId });
+      if (!response.ok) {
+        setRenameError(response.error ?? 'Unable to rename item.');
+        return;
+      }
+
+      setRenameFeedback(
+        `Renamed ${item.id} to ${nextId}${response.updatedTableCount > 0 ? ` and updated ${response.updatedTableCount} loot table${response.updatedTableCount === 1 ? '' : 's'}` : ''}.`,
+      );
+      cancelInlineRename();
+      resetRenameView();
+      await refreshRegistryData('', sortOrder);
+      router.refresh();
+    });
+  };
+
+  const handleBatchRename = () => {
+    if (selectedIds.length === 0) {
+      return;
+    }
+
+    if (batchRenamePreview.error) {
+      setRenameError(batchRenamePreview.error);
+      setRenameFeedback(null);
+      return;
+    }
+
+    if (batchRenamePreview.renames.length === 0) {
+      setRenameError('The current regex would not rename any selected items.');
+      setRenameFeedback(null);
+      return;
+    }
+
+    setRenameError(null);
+    setRenameFeedback(null);
+    setDeleteError(null);
+    setDeleteFeedback(null);
+    setRegisterError(null);
+    setRegisterFeedback(null);
+
+    startRenamingItems(async () => {
+      const response = await renameItemsAction(batchRenamePreview.renames);
+      if (!response.ok) {
+        setRenameError(response.error ?? 'Unable to rename selected items.');
+        return;
+      }
+
+      setRenameFeedback(
+        `Renamed ${response.renamedCount} item${response.renamedCount === 1 ? '' : 's'}${response.updatedTableCount > 0 ? ` and updated ${response.updatedTableCount} loot table${response.updatedTableCount === 1 ? '' : 's'}` : ''}.`,
+      );
+      resetRenameView();
+      await refreshRegistryData('', sortOrder);
       router.refresh();
     });
   };
@@ -291,8 +457,8 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
 
       <Card>
         <CardHeader className="gap-4">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div className="grid gap-2 sm:max-w-sm">
+          <div className="flex flex-wrap items-end gap-4">
+            <div className="grid flex-1 gap-2 min-[640px]:min-w-80">
               <Label htmlFor="item-search">Search</Label>
               <Input
                 id="item-search"
@@ -311,35 +477,61 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
                 Enable regex search
               </label>
             </div>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-              <div className="grid gap-2 sm:min-w-40">
-                <Label htmlFor="sort-order">Sort</Label>
-                <Select
-                  value={sortOrder}
-                  onValueChange={(value) => {
-                    setSortOrder(value as SortOrder);
-                    setSelectedIds([]);
+            {selectedIds.length > 0 && (
+              <div className="grid flex-1 gap-2 min-[640px]:min-w-80">
+                <Label htmlFor="item-rename-replace">Replace regex</Label>
+                <Input
+                  id="item-rename-replace"
+                  value={regexReplaceValue}
+                  onChange={(event) => {
+                    setRegexReplaceValue(event.target.value);
+                    setRenameError(null);
+                    setRenameFeedback(null);
                   }}
-                >
-                  <SelectTrigger id="sort-order">
-                    <SelectValue placeholder="Sort items" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(SORT_OPTIONS).map(([value, option]) => (
-                      <SelectItem key={value} value={value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Replacement for the selected items"
+                />
+                <p className="text-xs text-foreground/60">
+                  Search is used as the find regex for the {selectedIds.length} selected item{selectedIds.length === 1 ? '' : 's'}.
+                </p>
               </div>
-              {selectedIds.length > 0 && (
+            )}
+            <div className="grid w-full gap-2 min-[640px]:w-40">
+              <Label htmlFor="sort-order">Sort</Label>
+              <Select
+                value={sortOrder}
+                onValueChange={(value) => {
+                  setSortOrder(value as SortOrder);
+                  setSelectedIds([]);
+                }}
+              >
+                <SelectTrigger id="sort-order">
+                  <SelectValue placeholder="Sort items" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(SORT_OPTIONS).map(([value, option]) => (
+                    <SelectItem key={value} value={value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectedIds.length > 0 && (
+              <div className="flex w-full flex-wrap items-end gap-3 min-[900px]:ml-auto min-[900px]:w-auto">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleBatchRename}
+                  disabled={renamingItems || !!batchRenamePreview.error || batchRenamePreview.renames.length === 0}
+                >
+                  {renamingItems ? `Renaming ${selectedIds.length} items...` : `Rename ${selectedIds.length} items`}
+                </Button>
                 <Button type="button" variant="destructive" onClick={handleDeleteItems} disabled={deletingItems} className="gap-2">
                   <Trash2 className="h-4 w-4" />
                   {deletingItems ? `Deleting ${selectedIds.length} items...` : `Delete ${selectedIds.length} items`}
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {registrationOpen && (
@@ -368,9 +560,21 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
             </div>
           )}
 
-          {(deleteError || deleteFeedback || listError) && (
+          {(deleteError || deleteFeedback || listError || renameError || renameFeedback || selectedIds.length > 0) && (
             <div className="space-y-1">
               {listError && <p className="text-sm text-destructive">{listError}</p>}
+              {selectedIds.length > 0 && !renameError && !renameFeedback && batchRenamePreview.error && (
+                <p className="text-sm text-destructive">{batchRenamePreview.error}</p>
+              )}
+              {selectedIds.length > 0 && !renameError && !renameFeedback && !batchRenamePreview.error && (
+                <p className="text-sm text-foreground/65">
+                  {batchRenamePreview.renames.length > 0
+                    ? `${batchRenamePreview.renames.length} selected item${batchRenamePreview.renames.length === 1 ? '' : 's'} will be renamed.`
+                    : 'The current regex does not change any selected item IDs.'}
+                </p>
+              )}
+              {renameError && <p className="text-sm text-destructive">{renameError}</p>}
+              {renameFeedback && <p className="text-sm text-primary">{renameFeedback}</p>}
               {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
               {deleteFeedback && <p className="text-sm text-primary">{deleteFeedback}</p>}
             </div>
@@ -397,24 +601,26 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
                   </th>
                   <th className="px-4 py-3 text-left">ID</th>
                   <th className="px-4 py-3 text-left">Registered date</th>
+                  <th className="w-28 px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoadingPage && isEmpty ? (
                   <tr>
-                    <td className="px-4 py-6 text-center text-foreground/60" colSpan={3}>
+                    <td className="px-4 py-6 text-center text-foreground/60" colSpan={4}>
                       Loading items...
                     </td>
                   </tr>
                 ) : isEmpty ? (
                   <tr>
-                    <td className="px-4 py-6 text-center text-foreground/50" colSpan={3}>
+                    <td className="px-4 py-6 text-center text-foreground/50" colSpan={4}>
                       {isSearching ? 'No items match that ID search.' : 'No items registered yet.'}
                     </td>
                   </tr>
                 ) : (
                   items.map((item) => {
                     const isSelected = selectedIds.includes(item.id);
+                    const isEditing = editingItemId === item.id;
                     return (
                       <tr key={item.id} className="border-t border-border/40">
                         <td className="px-4 py-3">
@@ -426,9 +632,49 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
                             className="h-4 w-4 rounded border-white/20 bg-transparent text-primary focus:ring-ring"
                           />
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs text-white">{item.id}</td>
+                        <td className="px-4 py-3">
+                          {isEditing ? (
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Input
+                                value={singleRenameValue}
+                                onChange={(event) => setSingleRenameValue(event.target.value)}
+                                className="h-8 max-w-sm font-mono text-xs"
+                                aria-label={`Rename ${item.id}`}
+                              />
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleSingleRename(item)}
+                                disabled={renamingItems}
+                                aria-label={`Save rename for ${item.id}`}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={cancelInlineRename}
+                                disabled={renamingItems}
+                                aria-label={`Cancel rename for ${item.id}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <span className="font-mono text-xs text-white">{item.id}</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3 text-xs text-foreground/65">
                           {new Date(item.created_at).toLocaleString()}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {!isEditing && (
+                            <Button type="button" variant="ghost" size="icon" onClick={() => startInlineRename(item)} aria-label={`Rename ${item.id}`}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     );
@@ -436,7 +682,7 @@ export function ItemRegistry({ initialItems, initialTotalCount, pageSize = DEFAU
                 )}
                 {isLoadingMore && !isEmpty && (
                   <tr>
-                    <td className="px-4 py-4 text-center text-foreground/60" colSpan={3}>
+                    <td className="px-4 py-4 text-center text-foreground/60" colSpan={4}>
                       Loading more items...
                     </td>
                   </tr>
