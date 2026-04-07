@@ -7,8 +7,9 @@ export const DEFAULT_ITEMS_PAGE_SIZE = 100;
 
 export interface ItemsQueryOptions {
   search?: string;
-  orderBy?: 'created_at' | 'name';
-  ascending?: boolean;
+  searchMode?: 'contains' | 'regex';
+  sortBy?: 'created_at' | 'id';
+  sortDir?: 'asc' | 'desc';
 }
 
 export interface ItemsPageOptions extends ItemsQueryOptions {
@@ -29,13 +30,21 @@ function escapeForIlike(value: string) {
 
 export function createItemsQuery(
   client: SupabaseClient<Database>,
-  { search, orderBy = 'created_at', ascending = false }: ItemsQueryOptions = {},
+  { search, searchMode = 'contains', sortBy = 'created_at', sortDir = 'desc' }: ItemsQueryOptions = {},
 ) {
-  let query = client.from('items').select('*', { count: 'exact' }).order(orderBy, { ascending });
+  let query = client
+    .from('items')
+    .select('*', { count: 'exact' })
+    .order(sortBy, { ascending: sortDir === 'asc' });
 
   if (search && search.trim()) {
-    const normalized = escapeForIlike(search.trim());
-    query = query.or(`id.ilike.%${normalized}%,name.ilike.%${normalized}%`);
+    const normalized = search.trim();
+
+    if (searchMode === 'regex') {
+      query = query.filter('id', 'imatch', normalized);
+    } else {
+      query = query.ilike('id', `%${escapeForIlike(normalized)}%`);
+    }
   }
 
   return query;

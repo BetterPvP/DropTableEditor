@@ -11,6 +11,7 @@ const inviteSchema = z.object({
 const itemSchema = z.object({
   id: z.string().min(1),
 });
+const itemsSchema = z.array(z.string().trim().min(1)).min(1);
 
 function generateCode(prefix: string) {
   const random = Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
@@ -94,6 +95,33 @@ export async function registerItemAction(formData: FormData) {
   return { ok: true } as const;
 }
 
+export async function registerItemsAction(ids: string[]) {
+  const parsed = itemsSchema.safeParse(ids);
+  if (!parsed.success) {
+    return { ok: false, error: 'At least one valid item ID is required', registeredCount: 0, errorCount: ids.length } as const;
+  }
+
+  const uniqueIds = Array.from(new Set(parsed.data.map((id) => id.trim()).filter(Boolean)));
+  const supabase = createServerSupabaseClient();
+  const { data: auth } = await supabase.auth.getUser();
+  const userId = auth.user?.id ?? null;
+
+  if (!userId) {
+    return { ok: false, error: 'Not authenticated', registeredCount: 0, errorCount: uniqueIds.length } as const;
+  }
+
+  const { error } = await supabase
+    .from('items')
+    .upsert(uniqueIds.map((id) => ({ id })), { onConflict: 'id', ignoreDuplicates: true });
+
+  if (error) {
+    console.error('Failed to register items', error);
+    return { ok: false, error: 'Unable to register items', registeredCount: 0, errorCount: uniqueIds.length } as const;
+  }
+
+  return { ok: true, registeredCount: uniqueIds.length, errorCount: 0 } as const;
+}
+
 export async function deleteItemAction(formData: FormData) {
   const parsed = itemSchema.safeParse({
     id: formData.get('id'),
@@ -118,4 +146,29 @@ export async function deleteItemAction(formData: FormData) {
   }
 
   return { ok: true } as const;
+}
+
+export async function deleteItemsAction(ids: string[]) {
+  const parsed = itemsSchema.safeParse(ids);
+  if (!parsed.success) {
+    return { ok: false, error: 'At least one item ID is required', deletedCount: 0 } as const;
+  }
+
+  const uniqueIds = Array.from(new Set(parsed.data.map((id) => id.trim()).filter(Boolean)));
+  const supabase = createServerSupabaseClient();
+  const { data: auth } = await supabase.auth.getUser();
+  const userId = auth.user?.id ?? null;
+
+  if (!userId) {
+    return { ok: false, error: 'Not authenticated', deletedCount: 0 } as const;
+  }
+
+  const { error } = await supabase.from('items').delete().in('id', uniqueIds);
+
+  if (error) {
+    console.error('Failed to delete items', error);
+    return { ok: false, error: 'Unable to remove selected items', deletedCount: 0 } as const;
+  }
+
+  return { ok: true, deletedCount: uniqueIds.length } as const;
 }

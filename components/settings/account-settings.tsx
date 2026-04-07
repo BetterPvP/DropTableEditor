@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { Database } from '@/supabase/types';
-import { createInviteCodeAction } from '@/app/settings/actions';
+import { createInviteCodeAction } from '@/app/(dashboard)/settings/actions';
 
 interface AccountSettingsProps {
   user: User | null;
@@ -98,7 +98,7 @@ export function AccountSettings({ user, invites }: AccountSettingsProps) {
           <Badge variant="default">{invites.length} codes</Badge>
         </CardHeader>
         <CardContent className="grid gap-6 lg:grid-cols-[320px_1fr]">
-          <form className="space-y-4 rounded-2xl border border-white/10 bg-black/40 p-4" onSubmit={handleInviteSubmit}>
+          <form className="space-y-4 rounded-md border bg-muted/35 p-4" onSubmit={handleInviteSubmit}>
             <div className="space-y-2">
               <Label htmlFor="invite-role">Role</Label>
               <Input
@@ -127,9 +127,9 @@ export function AccountSettings({ user, invites }: AccountSettingsProps) {
             {inviteError && <p className="text-sm text-destructive">{inviteError}</p>}
             {inviteFeedback && <p className="text-sm text-primary">{inviteFeedback}</p>}
           </form>
-          <ScrollArea className="h-64 rounded-2xl border border-white/10 bg-black/30">
+          <ScrollArea className="h-64 rounded-md border bg-muted/25">
             <table className="w-full text-sm text-foreground/80">
-              <thead className="sticky top-0 bg-black/60 text-xs uppercase tracking-wide text-foreground/60">
+              <thead className="sticky top-0 bg-background text-xs uppercase tracking-wide text-foreground/60">
                 <tr>
                   <th className="px-4 py-2 text-left">Code</th>
                   <th className="px-4 py-2 text-left">Role</th>
@@ -146,7 +146,7 @@ export function AccountSettings({ user, invites }: AccountSettingsProps) {
                   </tr>
                 )}
                 {invites.map((invite) => (
-                  <tr key={invite.code} className="border-b border-white/5">
+                  <tr key={invite.code} className="border-b border-border/50">
                     <td className="px-4 py-2 font-mono text-xs">{invite.code}</td>
                     <td className="px-4 py-2 capitalize">{invite.role}</td>
                     <td className="px-4 py-2">

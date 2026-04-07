@@ -245,7 +245,7 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
             </Button>
             {error && <p className="text-xs text-destructive">{error}</p>}
             {running && (
-              <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+              <div className="h-2 w-full overflow-hidden rounded-sm bg-muted/60">
                 <div className="h-full bg-primary transition-all" style={{ width: `${Math.min(1, progress) * 100}%` }} />
               </div>
             )}
@@ -334,9 +334,9 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <ScrollArea className="flex-1 min-h-[400px] max-h-[600px] rounded-xl border border-white/10 bg-black/40">
+          <ScrollArea className="flex-1 min-h-[400px] max-h-[600px] rounded-md border bg-muted/30">
             <table className="w-full text-sm text-foreground/80">
-              <thead className="sticky top-0 bg-black/80 text-xs uppercase tracking-wide text-foreground/60">
+              <thead className="sticky top-0 bg-background text-xs uppercase tracking-wide text-foreground/60">
                 <tr>
                   <th className="px-3 py-2 text-left">Loot</th>
                   <th className="px-3 py-2 text-right">Type</th>
@@ -360,7 +360,7 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
                 {tableRows.map((entry) => (
                   <tr
                     key={entry.entryId}
-                    className={`border-b border-white/5 cursor-pointer transition-colors hover:bg-primary/10 ${selectedEntry === entry.entryId ? 'bg-primary/20' : ''}`}
+                    className={`cursor-pointer border-b border-border/40 transition-colors hover:bg-muted/60 ${selectedEntry === entry.entryId ? 'bg-primary/12' : ''}`}
                     onClick={() => setSelectedEntry(selectedEntry === entry.entryId ? null : entry.entryId)}
                   >
                     <td className="px-3 py-2">{entry.name}</td>
@@ -386,7 +386,7 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
             </table>
           </ScrollArea>
           {selectedRow && result && (
-            <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4">
+            <div className="rounded-md border border-primary/30 bg-primary/8 p-4">
               <h3 className="text-sm font-semibold text-white mb-3">Detailed Information: {selectedRow.name}</h3>
               <div className="grid gap-3 md:grid-cols-2 text-sm">
                 <div className="flex justify-between">
@@ -449,10 +449,10 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
                 </div>
               </div>
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+                <div className="rounded-md border bg-muted/30 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Timeline</h4>
-                    <div className="inline-flex gap-2 rounded-lg border border-white/10 bg-black/40 p-1">
+                    <div className="inline-flex gap-2 rounded-sm border bg-background p-1">
                       <Button
                         type="button"
                         variant={timelineView === 'roll' ? 'default' : 'ghost'}
@@ -479,7 +479,7 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
                     ) : (
                       <div className="mt-4">
                         <div className="relative h-24">
-                          <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-white/20" />
+                          <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-border" />
                           {(() => {
                             const maxRoll = Math.max(...rollTimelineEvents.map((event) => event.rollIndex));
                             return rollTimelineEvents.map((event, index) => {
@@ -585,7 +585,7 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
                     </div>
                   )}
                 </div>
-                <div className="rounded-xl border border-white/10 bg-black/40 p-4">
+                <div className="rounded-md border bg-muted/30 p-4">
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Probability weight</h4>
                   <div className="mt-4 h-48">
                     <ResponsiveContainer width="100%" height="100%">
@@ -615,7 +615,7 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
                   </p>
                 </div>
               </div>
-              <div className="mt-4 rounded-xl border border-white/10 bg-black/40 p-4">
+              <div className="mt-4 rounded-md border bg-muted/30 p-4">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Heat indicator</h4>
                 {(() => {
                   const expectedHits = selectedRow.baseProbability * result.totalRolls;
@@ -629,7 +629,7 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
                         <span>Observed vs expected</span>
                         <span className="font-semibold text-white">{ratio ? ratio.toFixed(2) : '0.00'}x</span>
                       </div>
-                      <div className="h-3 w-full overflow-hidden rounded-full bg-white/10">
+                      <div className="h-3 w-full overflow-hidden rounded-sm bg-muted/60">
                         <div className={`h-full ${color}`} style={{ width: widthPercent }} />
                       </div>
                       <div className="flex justify-between text-[11px] text-foreground/50">

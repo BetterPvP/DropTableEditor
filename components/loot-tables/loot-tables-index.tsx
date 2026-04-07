@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { ArrowRight, Clock3, Plus, Search, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { LootTableDefinition } from '@/lib/loot-tables/types';
-import { duplicateLootTableAction, deleteLootTableAction } from '@/app/loot-tables/actions';
+import { duplicateLootTableAction, deleteLootTableAction } from '@/app/(dashboard)/loot-tables/actions';
 
 export interface LootTableListItem {
   id: string;
@@ -108,7 +108,7 @@ export function LootTablesIndex({ query, tables }: LootTablesIndexProps) {
 
   return (
     <div className="space-y-8">
-      <div className="glass-panel flex flex-col gap-6 rounded-3xl border border-white/10 p-8">
+      <div className="glass-panel flex flex-col gap-6 rounded-lg border p-8">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h1 className="text-3xl font-semibold text-white">Loot Tables</h1>
           <Button asChild className="w-full md:w-auto">
@@ -144,12 +144,12 @@ export function LootTablesIndex({ query, tables }: LootTablesIndexProps) {
           <span>Data synchronises with Supabase in real time.</span>
         </div>
         {duplicateError && (
-          <div className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {duplicateError}
           </div>
         )}
         {deleteError && (
-          <div className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
             {deleteError}
           </div>
         )}

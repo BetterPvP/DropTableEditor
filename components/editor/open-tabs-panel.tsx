@@ -36,8 +36,8 @@ export function OpenTabsPanel({ activeId, tables }: OpenTabsPanelProps) {
                 <Link
                   href={`/loot-tables/${table.id}`}
                   className={cn(
-                    'flex items-center justify-between gap-3 rounded-2xl border border-transparent bg-white/5 px-3 py-2 text-sm transition hover:border-primary/40 hover:bg-primary/10',
-                    isActive && 'border-primary/50 bg-primary/20 text-primary-foreground',
+                    'flex items-center justify-between gap-3 rounded-md border border-transparent bg-muted/30 px-3 py-2 text-sm transition hover:border-primary/40 hover:bg-muted/65',
+                    isActive && 'border-primary/45 bg-primary/12 text-primary-foreground',
                   )}
                 >
                   <span className="truncate font-medium">{table.name}</span>

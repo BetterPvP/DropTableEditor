@@ -3,11 +3,10 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { CircleEllipsis, LogOut, MoonStar, Sparkles } from 'lucide-react';
+import { CircleEllipsis, LogOut, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { useTransparency } from '@/components/transparency-provider';
 import { createBrowserSupabaseClient } from '@/supabase/client';
 
 interface AppHeaderProps {
@@ -16,7 +15,6 @@ interface AppHeaderProps {
 
 export function AppHeader({ environment = 'development' }: AppHeaderProps) {
   const pathname = usePathname();
-  const { reduced, toggle } = useTransparency();
   const router = useRouter();
   const [signingOut, setSigningOut] = useState(false);
 
@@ -31,7 +29,7 @@ export function AppHeader({ environment = 'development' }: AppHeaderProps) {
   };
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-white/10 bg-slate-900/60 px-6 backdrop-blur-xl">
+    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background px-6">
       <div className="flex items-center gap-3">
         <Link href="/" className="flex items-center gap-2 text-lg font-semibold">
           <Sparkles className="h-5 w-5 text-primary" />
@@ -47,10 +45,6 @@ export function AppHeader({ environment = 'development' }: AppHeaderProps) {
         </div>
       </div>
       <div className="flex items-center gap-2">
-        <Button variant={reduced ? 'outline' : 'ghost'} size="sm" onClick={toggle} className="gap-2">
-          <MoonStar className="h-4 w-4" />
-          {reduced ? 'Enable glass' : 'Reduce glass'}
-        </Button>
         <Button variant="ghost" size="sm" asChild>
           <Link href="/settings/account">Account</Link>
         </Button>

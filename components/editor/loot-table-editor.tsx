@@ -31,8 +31,8 @@ import {
   lootTableDefinitionSchema,
 } from '@/lib/loot-tables/types';
 import { useAutosave } from '@/lib/hooks/use-autosave';
-import { saveLootTableAction } from '@/app/loot-tables/[id]/actions';
-import { deleteLootTableAction, duplicateLootTableAction } from '@/app/loot-tables/actions';
+import { saveLootTableAction } from '@/app/(dashboard)/loot-tables/[id]/actions';
+import { deleteLootTableAction, duplicateLootTableAction } from '@/app/(dashboard)/loot-tables/actions';
 import { cn } from '@/lib/utils';
 import type { Database } from '@/supabase/types';
 import { useRouter } from 'next/navigation';
@@ -210,8 +210,8 @@ function ItemCombobox({ items, value, onSelect, placeholder, disabled, className
       <button
         type="button"
         className={cn(
-          'flex w-full items-center justify-between rounded-md border border-white/10 bg-white/5 px-3 py-2 text-left text-sm shadow-sm transition-colors placeholder:text-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
-          disabled ? 'cursor-not-allowed opacity-50' : 'hover:border-primary/50 hover:bg-primary/10',
+          'flex w-full items-center justify-between rounded-sm border bg-muted/35 px-3 py-2 text-left text-sm shadow-sm transition-colors placeholder:text-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
+          disabled ? 'cursor-not-allowed opacity-50' : 'hover:border-primary/50 hover:bg-muted/65',
           className
         )}
         onClick={() => {
@@ -229,7 +229,7 @@ function ItemCombobox({ items, value, onSelect, placeholder, disabled, className
         <ChevronsUpDown className="h-4 w-4 text-foreground/50" />
       </button>
       {open && (
-        <div className="absolute left-0 z-30 mt-2 w-full min-w-[16rem] rounded-xl border border-white/10 bg-slate-950/95 p-2 shadow-xl backdrop-blur">
+        <div className="absolute left-0 z-30 mt-2 w-full min-w-[16rem] rounded-md border bg-popover p-2 shadow-xl">
           <Input
             autoFocus
             ref={inputRef}
@@ -249,8 +249,8 @@ function ItemCombobox({ items, value, onSelect, placeholder, disabled, className
                     key={item.id}
                     type="button"
                     className={cn(
-                      'flex w-full flex-col items-start rounded-lg px-3 py-2 text-left text-sm transition hover:bg-primary/10',
-                      isSelected ? 'bg-primary/20 text-white' : 'text-foreground',
+                      'flex w-full flex-col items-start rounded-sm px-3 py-2 text-left text-sm transition hover:bg-muted/65',
+                      isSelected ? 'bg-primary/12 text-white' : 'text-foreground',
                     )}
                     onClick={() => handleSelect(item.id)}
                   >
@@ -586,7 +586,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/10 bg-slate-900/60 px-6 py-4 backdrop-blur-xl">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card px-6 py-4">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold text-white">{definition.name}</h1>
           <p className="text-sm text-foreground/60">
@@ -622,7 +622,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
           <Button type="button" className="gap-2" onClick={handleExport}>
             <Download className="h-4 w-4" /> Export JSON
           </Button>
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-primary/40 bg-primary/10 px-3 py-2 text-sm text-primary hover:bg-primary/20">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded-sm border border-primary/40 bg-primary/12 px-3 py-2 text-sm text-primary hover:bg-primary/18">
             <Upload className="h-4 w-4" /> Import JSON
             <input type="file" accept="application/json" className="hidden" onChange={handleImport} />
           </label>
@@ -648,7 +648,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
       </div>
 
       {error && (
-        <div className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+        <div className="rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
       )}
@@ -749,7 +749,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 </div>
 
                 {definition.awardStrategy.type === 'LOOT_CHEST' && (
-                  <div className="space-y-4 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                  <div className="space-y-4 rounded-md border border-primary/30 bg-primary/8 p-4">
                     <div className="space-y-2">
                       <Label>Loot chest type</Label>
                       <div className="flex flex-wrap gap-2">
@@ -924,7 +924,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 </div>
 
                 {definition.rollStrategy.type === 'CONSTANT' && (
-                  <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                  <div className="space-y-3 rounded-md border border-primary/30 bg-primary/8 p-4">
                     <p className="text-xs text-foreground/60">Same number of rolls every time.</p>
                     <div className="space-y-1">
                       <Label htmlFor="constant-rolls">Rolls</Label>
@@ -946,7 +946,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 )}
 
                 {definition.rollStrategy.type === 'PROGRESSIVE' && (
-                  <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                  <div className="space-y-3 rounded-md border border-primary/30 bg-primary/8 p-4">
                     <p className="text-xs text-foreground/60">Rolls climb until reaching a ceiling.</p>
                     <div className="grid gap-3 sm:grid-cols-3">
                       <div className="space-y-1">
@@ -1008,7 +1008,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 )}
 
                 {definition.rollStrategy.type === 'RANDOM' && (
-                  <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                  <div className="space-y-3 rounded-md border border-primary/30 bg-primary/8 p-4">
                     <p className="text-xs text-foreground/60">Pick a roll count between two bounds.</p>
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="space-y-1">
@@ -1071,12 +1071,12 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 </div>
 
                 {definition.weightDistribution === 'PITY' && (
-                  <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                  <div className="space-y-3 rounded-md border border-primary/30 bg-primary/8 p-4">
                     <p className="text-xs text-foreground/60">
                       Each pity rule watches an entry and increases its weight after the specified number of failed rolls. The bump repeats every time the threshold is met.
                     </p>
                     {definition.pityRules.map((rule, index) => (
-                      <div key={rule.entryId} className="grid gap-2 rounded-xl border border-white/10 bg-black/40 p-3 sm:grid-cols-3">
+                      <div key={rule.entryId} className="grid gap-2 rounded-md border bg-muted/30 p-3 sm:grid-cols-3">
                         <div className="space-y-1">
                           <Label>Entry</Label>
                           <Select
@@ -1175,7 +1175,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 )}
 
                 {definition.weightDistribution === 'PROGRESSIVE' && (
-                <div className="space-y-3 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+                <div className="space-y-3 rounded-md border border-primary/30 bg-primary/8 p-4">
                   <p className="text-xs text-foreground/60">
                     Progressive mode recentres weights after each roll. Max shift caps the adjustment, shift factor controls the strength, and variance scaling scales shifts based on how far an entry is from the pack.
                   </p>
@@ -1325,7 +1325,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
             </CardHeader>
             <CardContent className="space-y-4">
               {definition.guaranteed.length === 0 && (
-                <p className="rounded-xl border border-dashed border-white/10 bg-black/40 p-4 text-sm text-foreground/60">
+                <p className="rounded-md border border-dashed bg-muted/30 p-4 text-sm text-foreground/60">
                   Add a given item to define guaranteed drops such as quest rewards.
                 </p>
               )}
@@ -1333,7 +1333,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 const label = getLootEntryLabel(entry, items);
                 const { label: badgeLabel, variant: badgeVariant, className: badgeClassName } = getEntryBadgeConfig(entry.type);
                 return (
-                  <div key={entry.id} className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/40 p-4">
+                  <div key={entry.id} className="space-y-3 rounded-md border bg-muted/30 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-white">{label}</p>
@@ -1535,7 +1535,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm">
+              <div className="flex items-center justify-between rounded-md border bg-muted/30 px-4 py-3 text-sm">
                 <span>Total weight</span>
                 <Badge variant="default">{totalWeight}</Badge>
               </div>
@@ -1543,7 +1543,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 Each probability uses P(x) = w(x) / Σw, so increasing one weight reduces the odds of all other entries proportionally.
               </p>
               {definition.entries.length === 0 && (
-                <p className="rounded-xl border border-dashed border-white/10 bg-black/40 p-4 text-sm text-foreground/60">
+                <p className="rounded-md border border-dashed bg-muted/30 p-4 text-sm text-foreground/60">
                   Add a dropped item to start defining weighted loot for this table.
                 </p>
               )}
@@ -1553,7 +1553,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 const probability = probabilities[entry.id] ?? 0;
                 const replacement = getReplacement(entry, definition.replacementStrategy);
                 return (
-                  <div key={entry.id} className="space-y-3 rounded-2xl border border-white/10 bg-slate-900/40 p-4">
+                  <div key={entry.id} className="space-y-3 rounded-md border bg-muted/30 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
                         <p className="text-sm font-semibold text-white">{label}</p>
@@ -1717,7 +1717,7 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
                 <span className="text-foreground/60">Total weight</span>
                 <Badge variant="default">{totalWeight}</Badge>
               </div>
-              <div className="rounded-2xl border border-white/10 bg-black/40 p-4 text-xs text-foreground/60">
+              <div className="rounded-md border bg-muted/30 p-4 text-xs text-foreground/60">
                 <p>
                   Autosave logs every change locally and syncs to Supabase on blur, pause, and safety intervals. Conflict resolution alerts will appear here if another editor publishes a newer version.
                 </p>
@@ -1760,11 +1760,11 @@ export function LootTableEditor({ tableId, definition: initialDefinition, metada
           <div
             key={notification.id}
             className={cn(
-              'rounded-xl border px-4 py-3 text-sm shadow-lg backdrop-blur-sm transition-all duration-300 animate-in slide-in-from-bottom-2',
+              'rounded-md border px-4 py-3 text-sm shadow-lg transition-all duration-300 animate-in slide-in-from-bottom-2',
               notification.type === 'success' &&
                 'border-green-500/40 bg-green-500/10 text-green-300',
               notification.type === 'info' &&
-                'border-primary/40 bg-primary/10 text-primary',
+                'border-primary/40 bg-primary/12 text-primary',
               notification.type === 'error' &&
                 'border-destructive/40 bg-destructive/10 text-destructive'
             )}

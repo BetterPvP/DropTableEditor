@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { SaveIndicator } from '@/components/save-indicator';
-import { createLootTableAction } from '@/app/loot-tables/new/actions';
+import { createLootTableAction } from '@/app/(dashboard)/loot-tables/new/actions';
 
 const schema = z.object({
   name: z.string().min(1, 'Name is required'),

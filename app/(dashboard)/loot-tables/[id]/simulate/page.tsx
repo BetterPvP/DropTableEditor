@@ -60,7 +60,7 @@ export default async function LootTableSimulationPage({ params }: SimulationPage
 
   let itemsData: ItemRow[] = [];
   try {
-    itemsData = await fetchAllItems(supabase, { orderBy: 'name', ascending: true });
+    itemsData = await fetchAllItems(supabase, { sortBy: 'id', sortDir: 'asc' });
   } catch (itemsError) {
     console.error('Failed to load items for simulation', itemsError);
   }
@@ -69,7 +69,7 @@ export default async function LootTableSimulationPage({ params }: SimulationPage
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-white/10 bg-slate-900/60 px-6 py-4 backdrop-blur-xl">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card px-6 py-4">
         <div className="space-y-1">
           <h1 className="text-2xl font-semibold text-white">{definition.name}</h1>
           <p className="text-sm text-foreground/60">
@@ -78,7 +78,7 @@ export default async function LootTableSimulationPage({ params }: SimulationPage
         </div>
         <Link
           href={`/loot-tables/${table.id}`}
-          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-foreground/80 transition hover:border-primary/40 hover:text-white"
+          className="inline-flex items-center gap-2 rounded-md border bg-muted/30 px-4 py-2 text-sm text-foreground/80 transition hover:border-primary/40 hover:bg-muted/65 hover:text-white"
         >
           <ArrowLeft className="h-4 w-4" /> Back to editor
         </Link>

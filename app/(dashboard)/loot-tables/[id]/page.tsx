@@ -57,7 +57,7 @@ export default async function LootTableEditorPage({ params }: LootTableEditorPag
 
   let itemsData: ItemRow[] = [];
   try {
-    itemsData = await fetchAllItems(supabase, { orderBy: 'name', ascending: true });
+    itemsData = await fetchAllItems(supabase, { sortBy: 'id', sortDir: 'asc' });
   } catch (itemsError) {
     console.error('Failed to load items for editor', itemsError);
   }

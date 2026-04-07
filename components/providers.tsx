@@ -4,7 +4,6 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { usePathname, useRouter } from 'next/navigation';
 import { ThemeProvider } from './theme-provider';
-import { TransparencyProvider } from './transparency-provider';
 import { createBrowserSupabaseClient } from '@/supabase/client';
 
 function SupabaseAuthSync() {
@@ -66,10 +65,8 @@ export function Providers({ children }: { children: ReactNode }) {
   return (
     <QueryClientProvider client={queryClient}>
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
-        <TransparencyProvider>
-          <SupabaseAuthSync />
-          {children}
-        </TransparencyProvider>
+        <SupabaseAuthSync />
+        {children}
       </ThemeProvider>
     </QueryClientProvider>
   );
