@@ -19,7 +19,7 @@ function renameLootEntries(entries: LootEntry[], renameMap: Map<string, string>)
   let changed = false;
 
   const nextEntries = entries.map((entry) => {
-    if (entry.type !== 'dropped_item' && entry.type !== 'given_item') {
+    if (entry.type !== 'dropped_item' && entry.type !== 'given_item' && entry.type !== 'fish') {
       return entry;
     }
 

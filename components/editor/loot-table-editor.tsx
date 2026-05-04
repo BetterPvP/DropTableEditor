@@ -94,6 +94,8 @@ const lootTypeSelectLabels: Record<LootType, string> = {
   dropped_clan_energy: 'Dropped energy',
   given_clan_energy: 'Given energy',
   clan_experience: 'Clan experience',
+  fish: 'Fish',
+  entity_spawn: 'Entity spawn',
 };
 
 type BadgeConfig = { label: string; variant: 'default' | 'destructive'; className?: string };
@@ -107,6 +109,8 @@ function getEntryBadgeConfig(type: LootType): BadgeConfig {
     case 'dropped_clan_energy': return { label: 'Dropped energy', variant: 'default', className: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' };
     case 'given_clan_energy': return { label: 'Given energy', variant: 'default', className: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' };
     case 'clan_experience': return { label: 'Clan XP', variant: 'default', className: 'bg-green-500/20 text-green-300 border-green-500/30' };
+    case 'fish': return { label: 'Fish', variant: 'default', className: 'bg-sky-500/20 text-sky-300 border-sky-500/30' };
+    case 'entity_spawn': return { label: 'Entity spawn', variant: 'default', className: 'bg-rose-500/20 text-rose-300 border-rose-500/30' };
   }
 }
 
@@ -122,6 +126,13 @@ function getLootEntryLabel(
   }
   if (entry.type === 'dropped_clan_energy' || entry.type === 'given_clan_energy') {
     return energyTypeLabels[entry.energyType];
+  }
+  if (entry.type === 'fish') {
+    const name = items.find((i) => i.id === entry.itemId)?.name ?? entry.itemId;
+    return `${name} (${entry.minWeight}lb–${entry.maxWeight}lb)`;
+  }
+  if (entry.type === 'entity_spawn') {
+    return entry.entityType;
   }
   return 'Clan Experience';
 }
@@ -294,6 +305,10 @@ export function LootTableEditor({
   const [selectedGuaranteedType, setSelectedGuaranteedType] = useState<LootType>('given_item');
   const [selectedGuaranteedCoinType, setSelectedGuaranteedCoinType] = useState<CoinType>('SMALL_NUGGET');
   const [selectedGuaranteedEnergyType, setSelectedGuaranteedEnergyType] = useState<EnergyType>('SHARD');
+  const [selectedWeightedFishId, setSelectedWeightedFishId] = useState<string>('');
+  const [selectedGuaranteedFishId, setSelectedGuaranteedFishId] = useState<string>('');
+  const [selectedWeightedEntityType, setSelectedWeightedEntityType] = useState<string>('DROWNED');
+  const [selectedGuaranteedEntityType, setSelectedGuaranteedEntityType] = useState<string>('DROWNED');
   const [collapsedEntries, setCollapsedEntries] = useState<Set<string>>(new Set());
 
   const toggleEntryCollapse = (id: string) => {
@@ -541,6 +556,23 @@ export function LootTableEditor({
       const energyType = target === 'entries' ? selectedWeightedEnergyType : selectedGuaranteedEnergyType;
       newEntry = { ...baseEntry, type, energyType, minAmount: 1, maxAmount: 1, autoDeposit: false };
       successMessage = `${energyTypeLabels[energyType]} energy loot added.`;
+    } else if (type === 'fish') {
+      const itemId = target === 'entries' ? selectedWeightedFishId : selectedGuaranteedFishId;
+      if (!itemId) {
+        addNotification('Select a fish item to add.', 'info');
+        return;
+      }
+      const item = items.find((i) => i.id === itemId);
+      if (!item) {
+        setError('Selected fish item could not be found.');
+        return;
+      }
+      newEntry = { ...baseEntry, type: 'fish', itemId: item.id, displayName: item.name ?? '', minWeight: 1, maxWeight: 1 };
+      successMessage = `Fish loot ${item.name ?? item.id} added.`;
+    } else if (type === 'entity_spawn') {
+      const entityType = target === 'entries' ? selectedWeightedEntityType : selectedGuaranteedEntityType;
+      newEntry = { ...baseEntry, type: 'entity_spawn', entityType, launchAtSource: false };
+      successMessage = `Entity spawn loot (${entityType}) added.`;
     } else {
       newEntry = { ...baseEntry, type: 'clan_experience', minXp: 100, maxXp: 100 };
       successMessage = 'Clan experience loot added.';
@@ -1384,14 +1416,33 @@ export function LootTableEditor({
                       </SelectContent>
                     </Select>
                   )}
+                  {selectedGuaranteedType === 'fish' && (
+                    <ItemCombobox
+                      className="sm:w-64"
+                      items={items}
+                      value={selectedGuaranteedFishId}
+                      onSelect={setSelectedGuaranteedFishId}
+                      disabled={items.length === 0}
+                      placeholder={items.length === 0 ? 'No items available' : 'Search or select item'}
+                    />
+                  )}
+                  {selectedGuaranteedType === 'entity_spawn' && (
+                    <Input
+                      className="sm:w-48"
+                      value={selectedGuaranteedEntityType}
+                      onChange={(event) => setSelectedGuaranteedEntityType(event.target.value.toUpperCase())}
+                      placeholder="e.g. DROWNED"
+                    />
+                  )}
                   <Button
                     type="button"
                     variant="outline"
                     className="gap-2"
                     onClick={() => addEntry('guaranteed')}
                     disabled={
-                      (selectedGuaranteedType === 'given_item' || selectedGuaranteedType === 'dropped_item') &&
-                      (availableGuaranteedItems.length === 0 || !selectedGuaranteedItemId)
+                      ((selectedGuaranteedType === 'given_item' || selectedGuaranteedType === 'dropped_item') &&
+                      (availableGuaranteedItems.length === 0 || !selectedGuaranteedItemId)) ||
+                      (selectedGuaranteedType === 'fish' && !selectedGuaranteedFishId)
                     }
                   >
                     <Plus className="h-4 w-4" /> Add guaranteed loot
@@ -1512,6 +1563,49 @@ export function LootTableEditor({
                             />
                           </div>
                         </>
+                      ) : entry.type === 'fish' ? (
+                        <>
+                          <div className="space-y-1">
+                            <Label>Display name</Label>
+                            <Input
+                              value={entry.displayName}
+                              onChange={(event) => handleGuaranteedChange(entry.id, { displayName: event.target.value })}
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Min weight (lb)</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={entry.minWeight}
+                              onChange={(event) => handleGuaranteedChange(entry.id, { minWeight: Number(event.target.value) || 0 })}
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Max weight (lb)</Label>
+                            <Input
+                              type="number"
+                              min={entry.minWeight}
+                              value={entry.maxWeight}
+                              onChange={(event) => handleGuaranteedChange(entry.id, { maxWeight: Number(event.target.value) || entry.maxWeight })}
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                        </>
+                      ) : entry.type === 'entity_spawn' ? (
+                        <>
+                          <div className="space-y-1">
+                            <Label>Entity type</Label>
+                            <Input
+                              value={entry.entityType}
+                              onChange={(event) => handleGuaranteedChange(entry.id, { entityType: event.target.value.toUpperCase() })}
+                              onBlur={autosave.handleBlur}
+                              placeholder="e.g. DROWNED"
+                            />
+                          </div>
+                        </>
                       ) : null}
                       <div className="space-y-1">
                         <Label>Replacement</Label>
@@ -1543,7 +1637,35 @@ export function LootTableEditor({
                               <SelectItem value="true">Yes</SelectItem>
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-foreground/50">Automatically deposit energy into the player's clan.</p>
+                          <p className="text-xs text-foreground/50">Automatically deposit energy into the player&apos;s clan.</p>
+                        </div>
+                      </div>
+                    )}
+                    {entry.type === 'entity_spawn' && (
+                      <div className="grid gap-3 sm:grid-cols-4">
+                        <div className="space-y-1">
+                          <Label>Launch at source</Label>
+                          <Select
+                            value={entry.launchAtSource ? 'true' : 'false'}
+                            onValueChange={(value) => handleGuaranteedChange(entry.id, { launchAtSource: value === 'true' })}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="false">No</SelectItem>
+                              <SelectItem value="true">Yes</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-foreground/50">Fling the entity toward the player after spawning.</p>
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label>PDC marker key</Label>
+                          <Input
+                            value={entry.pdcMarkerKey ?? ''}
+                            onChange={(event) => handleGuaranteedChange(entry.id, { pdcMarkerKey: event.target.value || undefined })}
+                            onBlur={autosave.handleBlur}
+                            placeholder="e.g. progression:fishing_swimmer"
+                          />
+                          <p className="text-xs text-foreground/50">Optional adventure Key set as a boolean PDC entry on the spawned entity.</p>
                         </div>
                       </div>
                     )}
@@ -1603,14 +1725,33 @@ export function LootTableEditor({
                       </SelectContent>
                     </Select>
                   )}
+                  {selectedWeightedType === 'fish' && (
+                    <ItemCombobox
+                      className="sm:w-64"
+                      items={items}
+                      value={selectedWeightedFishId}
+                      onSelect={setSelectedWeightedFishId}
+                      disabled={items.length === 0}
+                      placeholder={items.length === 0 ? 'No items available' : 'Search or select item'}
+                    />
+                  )}
+                  {selectedWeightedType === 'entity_spawn' && (
+                    <Input
+                      className="sm:w-48"
+                      value={selectedWeightedEntityType}
+                      onChange={(event) => setSelectedWeightedEntityType(event.target.value.toUpperCase())}
+                      placeholder="e.g. DROWNED"
+                    />
+                  )}
                   <Button
                     type="button"
                     variant="outline"
                     className="gap-2"
                     onClick={() => addEntry('entries')}
                     disabled={
-                      (selectedWeightedType === 'given_item' || selectedWeightedType === 'dropped_item') &&
-                      (availableWeightedItems.length === 0 || !selectedWeightedItemId)
+                      ((selectedWeightedType === 'given_item' || selectedWeightedType === 'dropped_item') &&
+                      (availableWeightedItems.length === 0 || !selectedWeightedItemId)) ||
+                      (selectedWeightedType === 'fish' && !selectedWeightedFishId)
                     }
                   >
                     <Plus className="h-4 w-4" /> Add loot
@@ -1750,6 +1891,49 @@ export function LootTableEditor({
                             <p className="text-xs text-foreground/50">Cap the possible XP per selection.</p>
                           </div>
                         </>
+                      ) : entry.type === 'fish' ? (
+                        <>
+                          <div className="space-y-1">
+                            <Label>Display name</Label>
+                            <Input
+                              value={entry.displayName}
+                              onChange={(event) => handleEntryChange(entry.id, { displayName: event.target.value })}
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Min weight (lb)</Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              value={entry.minWeight}
+                              onChange={(event) => handleEntryChange(entry.id, { minWeight: Number(event.target.value) || 0 })}
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Max weight (lb)</Label>
+                            <Input
+                              type="number"
+                              min={entry.minWeight}
+                              value={entry.maxWeight}
+                              onChange={(event) => handleEntryChange(entry.id, { maxWeight: Number(event.target.value) || entry.maxWeight })}
+                              onBlur={autosave.handleBlur}
+                            />
+                          </div>
+                        </>
+                      ) : entry.type === 'entity_spawn' ? (
+                        <>
+                          <div className="space-y-1">
+                            <Label>Entity type</Label>
+                            <Input
+                              value={entry.entityType}
+                              onChange={(event) => handleEntryChange(entry.id, { entityType: event.target.value.toUpperCase() })}
+                              onBlur={autosave.handleBlur}
+                              placeholder="e.g. DROWNED"
+                            />
+                          </div>
+                        </>
                       ) : null}
                       <div className="space-y-1">
                         <Label>Replacement</Label>
@@ -1781,7 +1965,35 @@ export function LootTableEditor({
                               <SelectItem value="true">Yes</SelectItem>
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-foreground/50">Automatically deposit energy into the player's clan.</p>
+                          <p className="text-xs text-foreground/50">Automatically deposit energy into the player&apos;s clan.</p>
+                        </div>
+                      </div>
+                    )}
+                    {entry.type === 'entity_spawn' && (
+                      <div className="grid gap-3 sm:grid-cols-4">
+                        <div className="space-y-1">
+                          <Label>Launch at source</Label>
+                          <Select
+                            value={entry.launchAtSource ? 'true' : 'false'}
+                            onValueChange={(value) => handleEntryChange(entry.id, { launchAtSource: value === 'true' })}
+                          >
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="false">No</SelectItem>
+                              <SelectItem value="true">Yes</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <p className="text-xs text-foreground/50">Fling the entity toward the player after spawning.</p>
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label>PDC marker key</Label>
+                          <Input
+                            value={entry.pdcMarkerKey ?? ''}
+                            onChange={(event) => handleEntryChange(entry.id, { pdcMarkerKey: event.target.value || undefined })}
+                            onBlur={autosave.handleBlur}
+                            placeholder="e.g. progression:fishing_swimmer"
+                          />
+                          <p className="text-xs text-foreground/50">Optional adventure Key set as a boolean PDC entry on the spawned entity.</p>
                         </div>
                       </div>
                     )}

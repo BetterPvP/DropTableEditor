@@ -11,6 +11,8 @@ export const lootTypes = [
   'dropped_clan_energy',
   'given_clan_energy',
   'clan_experience',
+  'fish',
+  'entity_spawn',
 ] as const;
 export type LootType = (typeof lootTypes)[number];
 
@@ -118,11 +120,30 @@ export const clanExperienceLootSchema = lootEntryBaseSchema.extend({
 
 export type ClanExperienceLoot = z.infer<typeof clanExperienceLootSchema>;
 
+export const fishLootSchema = lootEntryBaseSchema.extend({
+  type: z.literal('fish'),
+  itemId: z.string(),
+  displayName: z.string().default(''),
+  minWeight: z.number().int().nonnegative().default(1),
+  maxWeight: z.number().int().positive().default(1),
+});
+export type FishLoot = z.infer<typeof fishLootSchema>;
+
+export const entitySpawnLootSchema = lootEntryBaseSchema.extend({
+  type: z.literal('entity_spawn'),
+  entityType: z.string().regex(/^[A-Z][A-Z0-9_]*$/, 'Use uppercase EntityType enum name'),
+  launchAtSource: z.boolean().default(false),
+  pdcMarkerKey: z.string().optional(),
+});
+export type EntitySpawnLoot = z.infer<typeof entitySpawnLootSchema>;
+
 export const lootEntrySchema = z.union([
   itemLootSchema,
   coinLootSchema,
   clanEnergyLootSchema,
   clanExperienceLootSchema,
+  fishLootSchema,
+  entitySpawnLootSchema,
 ]);
 
 export type LootEntry = z.infer<typeof lootEntrySchema>;
@@ -201,6 +222,8 @@ export function getEntryKey(entry: LootEntry): string {
   if (entry.type === 'dropped_item' || entry.type === 'given_item') return entry.itemId;
   if (entry.type === 'dropped_coin' || entry.type === 'given_coin') return `${entry.type}:${entry.coinType}`;
   if (entry.type === 'dropped_clan_energy' || entry.type === 'given_clan_energy') return `${entry.type}:${entry.energyType}`;
+  if (entry.type === 'fish') return entry.itemId;
+  if (entry.type === 'entity_spawn') return `entity_spawn:${entry.entityType}`;
   return entry.type;
 }
 

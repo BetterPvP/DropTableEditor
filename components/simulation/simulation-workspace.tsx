@@ -33,6 +33,8 @@ function getEntryAvgQty(entry: LootEntry): number {
     entry.type === 'given_clan_energy'
   ) return (entry.minAmount + entry.maxAmount) / 2;
   if (entry.type === 'clan_experience') return (entry.minXp + entry.maxXp) / 2;
+  if (entry.type === 'fish') return (entry.minWeight + entry.maxWeight) / 2;
+  if (entry.type === 'entity_spawn') return 1;
   return 1;
 }
 import type { Database } from '@/supabase/types';
@@ -397,9 +399,11 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
                     <td className="px-3 py-2 text-right text-xs">
                       {entry.source === 'guaranteed'
                         ? 'Guaranteed'
-                        : entry.type === 'dropped_item'
+                        : entry.type === 'dropped_item' || entry.type === 'fish'
                           ? 'Drop'
-                          : 'Give'}
+                          : entry.type === 'entity_spawn'
+                            ? 'Entity spawn'
+                            : 'Give'}
                     </td>
                     <td className="px-3 py-2 text-right">{entry.totalDrops.toLocaleString()}</td>
                     <td className="px-3 py-2 text-right">{entry.perRunAverage.toFixed(2)}</td>
@@ -426,10 +430,12 @@ export function SimulationWorkspace({ definition, probabilities, items }: Simula
                   <span className="text-foreground/60">Entry Type:</span>
                   <span className="text-foreground/90">
                     {selectedRow.source === 'guaranteed'
-                      ? `Guaranteed ${selectedRow.type === 'dropped_item' ? 'Drop' : 'Give'}`
-                      : selectedRow.type === 'dropped_item'
+                      ? `Guaranteed ${selectedRow.type === 'dropped_item' || selectedRow.type === 'fish' ? 'Drop' : selectedRow.type === 'entity_spawn' ? 'Entity spawn' : 'Give'}`
+                      : selectedRow.type === 'dropped_item' || selectedRow.type === 'fish'
                         ? 'Dropped Item'
-                        : 'Given Item'}
+                        : selectedRow.type === 'entity_spawn'
+                          ? 'Entity Spawn'
+                          : 'Given Item'}
                   </span>
                 </div>
                 <div className="flex justify-between">
