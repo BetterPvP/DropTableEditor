@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useState, useTransition } from 'react';
+import { FormEvent, useEffect, useState, useTransition } from 'react';
 import { z } from 'zod';
 import { useAutosave } from '@/lib/hooks/use-autosave';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -80,6 +80,19 @@ export function CreateLootTableForm() {
       }
     });
   };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        if (autosave.dirty && autosave.status !== 'saving') {
+          void autosave.saveNow();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [autosave]);
 
   return (
     <form className="space-y-8" onSubmit={handleSubmit}>
