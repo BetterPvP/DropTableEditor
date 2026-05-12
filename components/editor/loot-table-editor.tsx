@@ -2,7 +2,7 @@
 
 import { ChangeEvent, FocusEvent, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ChevronRight, ChevronsUpDown, Copy, Download, Plus, Share2, Trash2, Upload, Wand2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsUpDown, Copy, Download, Plus, Save, Share2, Trash2, Upload, Wand2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -389,6 +389,7 @@ export function LootTableEditor({
   const autosave = useAutosave({
     key: `loot-table:${tableId}`,
     value: definition,
+    enabled: false,
     onSave: async ({ value }) => {
       setError(null);
       const result = await saveLootTableAction({ tableId, definition: value });
@@ -684,6 +685,16 @@ export function LootTableEditor({
           <SaveIndicator status={autosave.status} />
           <Button
             type="button"
+            variant="default"
+            className="gap-2 bg-emerald-600 hover:bg-emerald-700"
+            onClick={() => autosave.saveNow()}
+            disabled={autosave.status === 'saving' || !autosave.dirty}
+          >
+            <Save className="h-4 w-4" />
+            {autosave.status === 'saving' ? 'Saving...' : 'Save changes'}
+          </Button>
+          <Button
+            type="button"
             variant="ghost"
             className="gap-2"
             onClick={async () => {
@@ -733,7 +744,9 @@ export function LootTableEditor({
                   Name and description help other designers understand the loot table at a glance.
                 </CardDescription>
               </div>
-              <Badge variant="info">Live autosave</Badge>
+              <Badge variant="outline" className={cn(autosave.dirty && "border-amber-500/50 text-amber-500")}>
+                {autosave.dirty ? 'Unsaved changes' : 'Synced'}
+              </Badge>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <PresenceField fieldId="name" presence={others} className="sm:col-span-2">
@@ -1815,7 +1828,7 @@ export function LootTableEditor({
               </div>
               <div className="rounded-md border bg-muted/30 p-4 text-xs text-foreground/60">
                 <p>
-                  Autosave writes directly to Supabase on blur, pause, and safety intervals. Snapshots advance the table version, and remote field edits resolve with last-writer-wins semantics.
+                  Manual saves write directly to Supabase. Snapshots advance the table version, and remote field edits resolve with last-writer-wins semantics.
                 </p>
               </div>
             </CardContent>

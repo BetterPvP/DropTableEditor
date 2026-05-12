@@ -84,7 +84,7 @@ export function CreateLootTableForm() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-semibold text-white">Create loot table</h1>
-          <p className="text-sm text-foreground/70">Draft a new table and the autosave engine will protect your changes.</p>
+          <p className="text-sm text-foreground/70">Draft a new table and your changes will be protected as you work.</p>
         </div>
         <Badge variant="info">Draft</Badge>
       </div>
