@@ -25,6 +25,12 @@ function getQuantityRange(entry: LootEntry): { min: number; max: number } {
   if (entry.type === 'clan_experience') {
     return { min: entry.minXp, max: entry.maxXp };
   }
+  if (entry.type === 'fish') {
+    return { min: entry.minWeight, max: entry.maxWeight };
+  }
+  if (entry.type === 'entity_spawn') {
+    return { min: 1, max: 1 };
+  }
   return { min: 0, max: 0 };
 }
 
@@ -340,9 +346,15 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     entryId,
     type: payload.entry.type,
     totalDrops: payload.totalDrops,
-    minYield: payload.entry.type === 'dropped_item' || payload.entry.type === 'given_item' ? payload.entry.minYield : undefined,
-    maxYield: payload.entry.type === 'dropped_item' || payload.entry.type === 'given_item' ? payload.entry.maxYield : undefined,
-    itemId: payload.entry.type === 'dropped_item' || payload.entry.type === 'given_item' ? payload.entry.itemId : undefined,
+    minYield: payload.entry.type === 'dropped_item' || payload.entry.type === 'given_item'
+      ? payload.entry.minYield
+      : payload.entry.type === 'fish' ? payload.entry.minWeight : undefined,
+    maxYield: payload.entry.type === 'dropped_item' || payload.entry.type === 'given_item'
+      ? payload.entry.maxYield
+      : payload.entry.type === 'fish' ? payload.entry.maxWeight : undefined,
+    itemId: payload.entry.type === 'dropped_item' || payload.entry.type === 'given_item' || payload.entry.type === 'fish'
+      ? payload.entry.itemId
+      : undefined,
     firstAppearedAt: payload.firstAppearance,
     firstRunAppearance: payload.firstRun,
     probability:
