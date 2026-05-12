@@ -75,6 +75,8 @@ export function CreateLootTableForm() {
       const response = await createLootTableAction(formData);
       if (response && !response.ok) {
         setServerError(response.error ?? 'Unable to create loot table');
+      } else {
+        autosave.markClean(state);
       }
     });
   };

@@ -209,12 +209,11 @@ function ItemCombobox({ items, value, onSelect, placeholder, disabled, className
       setQuery('');
       return;
     }
-    const nextValue = selectedItem ? selectedItem.name ?? selectedItem.id : '';
-    setQuery(nextValue);
+    setQuery('');
     requestAnimationFrame(() => {
       inputRef.current?.select();
     });
-  }, [open, selectedItem]);
+  }, [open]);
 
   const handleSelect = (itemId: string) => {
     onSelect(itemId);
@@ -695,6 +694,7 @@ export function LootTableEditor({
             setError(result?.error ?? 'Unable to delete loot table.');
             return;
           }
+          autosave.markClean(definition);
           router.push('/loot-tables');
         })
         .catch((error) => {

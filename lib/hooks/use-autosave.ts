@@ -113,15 +113,20 @@ export function useAutosave<T>({
   }, [createSnapshot, getIdleSnapshotLabel, idleSnapshotMs, onCreateSnapshot, value, enabled]);
 
   useEffect(() => {
-    if (!enabled || typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return;
 
-    const handleBeforeUnload = () => {
-      void performSave();
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (enabled) {
+        void performSave();
+      } else if (dirty) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [performSave, enabled]);
+  }, [performSave, enabled, dirty]);
 
   const handleBlur = useCallback(() => {
     if (!enabled) return;
