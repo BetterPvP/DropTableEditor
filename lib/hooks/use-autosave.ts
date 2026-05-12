@@ -27,7 +27,7 @@ export function useAutosave<T>({
 }: AutosaveOptions<T>) {
   const [status, setStatus] = useState<AutosaveStatus>('idle');
   const [dirty, setDirty] = useState(false);
-  const lastSavedRef = useRef<T | null>(null);
+  const lastSavedRef = useRef<T>(value);
   const debounceRef = useRef<NodeJS.Timeout>();
   const intervalRef = useRef<NodeJS.Timeout>();
   const idleSnapshotRef = useRef<NodeJS.Timeout>();
@@ -124,8 +124,45 @@ export function useAutosave<T>({
       }
     };
 
+    const handlePopState = (e: PopStateEvent) => {
+      if (!enabled && dirty) {
+        if (!window.confirm('You have unsaved changes. Are you sure you want to leave?')) {
+          // Push the current state back to keep the user on the page
+          window.history.pushState(null, '', window.location.href);
+        }
+      }
+    };
+
+    const handleClick = (e: MouseEvent) => {
+      if (enabled || !dirty) return;
+
+      const target = e.target as HTMLElement;
+      const anchor = target.closest('a');
+
+      if (anchor && anchor.href && anchor.host === window.location.host) {
+        // Internal link
+        const targetUrl = new URL(anchor.href);
+        if (targetUrl.pathname === window.location.pathname && targetUrl.search === window.location.search) {
+            // Same page, maybe a hash or just same URL
+            return;
+        }
+
+        if (!window.confirm('You have unsaved changes. Are you sure you want to leave?')) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
+    };
+
     window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('click', handleClick, true); // Capture phase to intercept before Next.js
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('click', handleClick, true);
+    };
   }, [performSave, enabled, dirty]);
 
   const handleBlur = useCallback(() => {
