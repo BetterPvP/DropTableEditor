@@ -51,6 +51,7 @@ async function Content({ query }: { query: string }) {
               progressive: undefined,
               entries: [],
               guaranteed: [],
+              inputs: [],
               version: table.version,
               updated_at: table.updated_at,
             },

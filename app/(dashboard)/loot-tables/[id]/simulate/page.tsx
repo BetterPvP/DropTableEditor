@@ -54,6 +54,7 @@ export default async function LootTableSimulationPage({ params }: SimulationPage
         progressive: undefined,
         entries: [],
         guaranteed: [],
+        inputs: [],
         version: table.version,
         updated_at: table.updated_at,
       };

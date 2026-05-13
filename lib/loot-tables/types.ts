@@ -73,14 +73,49 @@ export const rollStrategySchema = z.discriminatedUnion('type', [
     min: z.number().int().nonnegative(),
     max: z.number().int().positive(),
   }),
+  z.object({
+    type: z.literal('EXPRESSION'),
+    expression: z.string().min(1),
+    fallback: z.number().int().nonnegative().default(0),
+  }),
 ]);
 
 export type RollStrategy = z.infer<typeof rollStrategySchema>;
 
+/**
+ * An entry weight. A plain integer is a constant weight; the object form
+ * evaluates {@code expression} at roll time, falling back to {@code fallback}
+ * and using {@code preview} for menu/probability previews.
+ */
+export const entryWeightSchema = z.union([
+  z.number().nonnegative(),
+  z.object({
+    type: z.literal('CONSTANT'),
+    value: z.number().nonnegative(),
+  }),
+  z.object({
+    type: z.literal('EXPRESSION'),
+    expression: z.string().min(1),
+    fallback: z.number().nonnegative().default(0),
+    preview: z.number().nonnegative().default(0),
+  }),
+]);
+
+export type EntryWeight = z.infer<typeof entryWeightSchema>;
+
+/** Returns the numeric value used for previews/probabilities. */
+export function getPreviewWeight(weight: EntryWeight): number {
+  if (typeof weight === 'number') return weight;
+  if (weight.type === 'CONSTANT') return weight.value;
+  return weight.preview;
+}
+
 export const lootEntryBaseSchema = z.object({
   id: z.string(),
   type: z.enum(lootTypes),
-  weight: z.number().nonnegative().default(0),
+  weight: entryWeightSchema.default(0),
+  /** Optional JEXL expression evaluated against context inputs. Loot drops only when truthy. */
+  condition: z.string().optional(),
   replacementStrategy: z.enum(replacementStrategies).default('UNSET'),
 });
 
@@ -164,6 +199,18 @@ export const progressiveConfigSchema = z.object({
 
 export type ProgressiveConfig = z.infer<typeof progressiveConfigSchema>;
 
+/** Documents an input variable that callers populate when invoking this table. */
+export const inputDeclarationSchema = z.object({
+  key: z.string().min(1),
+  description: z.string().default(''),
+  defaultValue: z.union([z.number(), z.string(), z.boolean()]).optional(),
+});
+
+export type InputDeclaration = z.infer<typeof inputDeclarationSchema>;
+
+/** Reserved input names supplied automatically by the loot system. */
+export const RESERVED_INPUT_KEYS = ['roll_index', 'bundle_size', 'history_size', 'source'] as const;
+
 export const lootTableDefinitionSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -177,6 +224,8 @@ export const lootTableDefinitionSchema = z.object({
   awardStrategy: awardStrategySchema.default({ type: 'DEFAULT' }),
   entries: z.array(lootEntrySchema),
   guaranteed: z.array(lootEntrySchema).default([]),
+  /** Declared inputs that callers populate for this table's expressions. */
+  inputs: z.array(inputDeclarationSchema).default([]),
   version: z.number().int().nonnegative().default(0),
   updated_at: z.string(),
 });
@@ -228,9 +277,10 @@ export function getEntryKey(entry: LootEntry): string {
 }
 
 export function computeWeightTotals(entries: LootEntry[]): { totalWeight: number; probabilities: Record<string, number> } {
-  const totalWeight = entries.reduce((sum, entry) => sum + entry.weight, 0);
+  const weights = entries.map((entry) => getPreviewWeight(entry.weight));
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
   const probabilities = Object.fromEntries(
-    entries.map((entry) => [entry.id, totalWeight > 0 ? entry.weight / totalWeight : 0]),
+    entries.map((entry, i) => [entry.id, totalWeight > 0 ? weights[i] / totalWeight : 0]),
   );
   return { totalWeight, probabilities };
 }

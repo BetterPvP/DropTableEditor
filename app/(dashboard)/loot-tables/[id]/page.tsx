@@ -54,6 +54,7 @@ export default async function LootTableEditorPage({ params }: LootTableEditorPag
         awardStrategy: { type: 'DEFAULT' } as const,
         entries: [],
         guaranteed: [],
+        inputs: [],
         version: table.version,
         updated_at: table.updated_at,
       };

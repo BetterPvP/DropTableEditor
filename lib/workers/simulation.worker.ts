@@ -8,6 +8,7 @@ import {
   SimulationResult,
   SimulationTimelineEventType,
   SimulationResultEntrySource,
+  getPreviewWeight,
 } from '../loot-tables/types';
 
 function getQuantityRange(entry: LootEntry): { min: number; max: number } {
@@ -91,6 +92,10 @@ function getRollCount(
     }
     case 'RANDOM':
       return randomInt(rng, strategy.min, strategy.max);
+    case 'EXPRESSION':
+      // Simulation cannot evaluate JEXL expressions in the browser; fall back to the
+      // author-supplied fallback value so previews remain meaningful.
+      return Math.max(0, Math.floor(strategy.fallback));
     default:
       return 0;
   }
@@ -103,7 +108,7 @@ function applyPityWeights(
   failedRuns: Record<string, number>,
   awardedThisRun: Set<string>, // suppress pity inside current bundle/run
 ): number {
-  const baseWeight = entry.currentWeight ?? entry.weight;
+  const baseWeight = entry.currentWeight ?? getPreviewWeight(entry.weight);
 
   // if already awarded in this run (including guaranteed), no pity boost
   if (awardedThisRun.has(entry.id)) return baseWeight;
@@ -204,7 +209,7 @@ self.onmessage = (event: MessageEvent<WorkerMessage>) => {
     const runHits = new Set<string>();
     const entries = entriesTemplate.map((entry) => ({
       ...entry,
-      currentWeight: entry.weight,
+      currentWeight: getPreviewWeight(entry.weight),
       removed: false,
     }));
 

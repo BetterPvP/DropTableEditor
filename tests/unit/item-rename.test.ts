@@ -48,6 +48,7 @@ function createDefinition(): LootTableDefinition {
         maxYield: 1,
       },
     ],
+    inputs: [],
     version: 3,
     updated_at: '2026-04-07T00:00:00.000Z',
   };

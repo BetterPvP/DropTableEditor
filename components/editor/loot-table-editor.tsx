@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SaveIndicator } from '@/components/save-indicator';
 import { JSONPreview } from './json-preview';
+import { WeightField, ConditionField } from './entry-expression-fields';
 import {
   LootEntry,
   LootType,
@@ -406,12 +407,16 @@ export function LootTableEditor({
     enabled: false,
     onSave: async ({ value }) => {
       setError(null);
-      const result = await saveLootTableAction({ tableId, definition: value });
+      const normalized = {
+        ...value,
+        guaranteed: value.guaranteed.map((entry) => ({ ...entry, weight: 1 })),
+      };
+      const result = await saveLootTableAction({ tableId, definition: normalized });
       if (!result.ok) {
         setError(result.error ?? 'Unable to save loot table');
         throw new Error(result.error ?? 'Unable to save loot table');
       }
-      const nextDefinition = { ...value, version: result.version, updated_at: result.updated_at };
+      const nextDefinition = { ...normalized, version: result.version, updated_at: result.updated_at };
       setDefinition(nextDefinition);
       return { value: nextDefinition };
     },
@@ -1056,6 +1061,13 @@ export function LootTableEditor({
                   >
                     Random
                   </Button>
+                  <Button
+                    type="button"
+                    variant={definition.rollStrategy.type === 'EXPRESSION' ? 'default' : 'outline'}
+                    onClick={() => handleRollStrategyChange({ type: 'EXPRESSION', expression: '', fallback: 1 })}
+                  >
+                    Expression
+                  </Button>
                 </div>
 
                 {definition.rollStrategy.type === 'CONSTANT' && (
@@ -1142,6 +1154,51 @@ export function LootTableEditor({
                   </div>
                 )}
 
+                {definition.rollStrategy.type === 'EXPRESSION' && (
+                  <div className="space-y-3 rounded-md border border-primary/30 bg-primary/8 p-4">
+                    <p className="text-xs text-foreground/60">
+                      Evaluate a JEXL expression against the context's inputs to determine the roll count. Result is rounded to a non-negative integer.
+                    </p>
+                    <div className="space-y-1">
+                      <Label htmlFor="expression-expr">Expression</Label>
+                      <Textarea
+                        id="expression-expr"
+                        rows={2}
+                        value={definition.rollStrategy.expression}
+                        placeholder="e.g. fn:clamp(4 - slayer_standing, 1, 3)"
+                        onChange={(event) => {
+                          if (definition.rollStrategy.type === 'EXPRESSION') {
+                            handleRollStrategyChange({
+                              ...definition.rollStrategy,
+                              expression: event.target.value,
+                            });
+                          }
+                        }}
+                        onBlur={autosave.handleBlur}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="expression-fallback">Fallback</Label>
+                      <Input
+                        id="expression-fallback"
+                        type="number"
+                        min={0}
+                        value={definition.rollStrategy.fallback}
+                        onChange={(event) => {
+                          if (definition.rollStrategy.type === 'EXPRESSION') {
+                            handleRollStrategyChange({
+                              ...definition.rollStrategy,
+                              fallback: Number(event.target.value) || 0,
+                            });
+                          }
+                        }}
+                        onBlur={autosave.handleBlur}
+                      />
+                      <p className="text-xs text-foreground/50">Used when the expression fails to evaluate (e.g. missing variable).</p>
+                    </div>
+                  </div>
+                )}
+
                 {definition.rollStrategy.type === 'RANDOM' && (
                   <div className="space-y-3 rounded-md border border-primary/30 bg-primary/8 p-4">
                     <p className="text-xs text-foreground/60">Pick a roll count between two bounds.</p>
@@ -1186,6 +1243,78 @@ export function LootTableEditor({
                   </div>
                 )}
               </section>
+              </PresenceField>
+
+              <PresenceField fieldId="inputs" presence={others}>
+                <section className="space-y-4" data-field-id="inputs">
+                  <Label>Inputs</Label>
+                  <p className="text-xs text-foreground/60">
+                    Document the variables that callers populate when invoking this table. These names become available inside expressions. Reserved: <code>roll_index, bundle_size, history_size, source</code>.
+                  </p>
+                  <div className="space-y-3">
+                    {(definition.inputs ?? []).map((input, index) => (
+                      <div key={index} className="grid gap-2 sm:grid-cols-[1fr_2fr_auto] items-start rounded-md border border-foreground/10 p-3">
+                        <div className="space-y-1">
+                          <Label className="text-xs">Key</Label>
+                          <Input
+                            value={input.key}
+                            placeholder="slayer_standing"
+                            onChange={(event) => {
+                              const key = event.target.value;
+                              applyDefinitionUpdate((prev) => ({
+                                ...prev,
+                                inputs: (prev.inputs ?? []).map((i, idx) => (idx === index ? { ...i, key } : i)),
+                              }), 'inputs');
+                            }}
+                            onBlur={autosave.handleBlur}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-xs">Description</Label>
+                          <Input
+                            value={input.description}
+                            placeholder="1 = first place, 2 = second, 3 = third"
+                            onChange={(event) => {
+                              const description = event.target.value;
+                              applyDefinitionUpdate((prev) => ({
+                                ...prev,
+                                inputs: (prev.inputs ?? []).map((i, idx) => (idx === index ? { ...i, description } : i)),
+                              }), 'inputs');
+                            }}
+                            onBlur={autosave.handleBlur}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label="Remove input"
+                          onClick={() =>
+                            applyDefinitionUpdate((prev) => ({
+                              ...prev,
+                              inputs: (prev.inputs ?? []).filter((_, idx) => idx !== index),
+                            }), 'inputs')
+                          }
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      applyDefinitionUpdate((prev) => ({
+                        ...prev,
+                        inputs: [...(prev.inputs ?? []), { key: '', description: '' }],
+                      }), 'inputs')
+                    }
+                  >
+                    <Plus className="mr-2 h-4 w-4" /> Add input
+                  </Button>
+                </section>
               </PresenceField>
 
               <PresenceField fieldId="weightDistribution" presence={others}>
@@ -1509,18 +1638,7 @@ export function LootTableEditor({
                       </div>
                     </div>
                     {!isCollapsed && (<>
-                    <div className="grid gap-3 sm:grid-cols-4">
-                      <div className="space-y-1">
-                        <Label>Weight</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={entry.weight}
-                          onChange={(event) => handleGuaranteedChange(entry.id, { weight: Number(event.target.value) || 0 })}
-                          onBlur={autosave.handleBlur}
-                        />
-                        <p className="text-xs text-foreground/50">Weight is stored for export parity even though guarantees always trigger.</p>
-                      </div>
+                    <div className="grid gap-3 sm:grid-cols-3">
                       {(entry.type === 'dropped_item' || entry.type === 'given_item') ? (
                         <>
                           <div className="space-y-1">
@@ -1696,6 +1814,13 @@ export function LootTableEditor({
                         </div>
                       </div>
                     )}
+                    <div className="grid gap-3 sm:grid-cols-4">
+                      <ConditionField
+                        value={entry.condition}
+                        onChange={(condition) => handleGuaranteedChange(entry.id, { condition })}
+                        onBlur={autosave.handleBlur}
+                      />
+                    </div>
                     </>)}
                   </div>
                 );
@@ -1832,17 +1957,12 @@ export function LootTableEditor({
                     </div>
                     {!isCollapsed && (<>
                     <div className="grid gap-3 sm:grid-cols-4">
-                      <div className="space-y-1">
-                        <Label>Weight</Label>
-                        <Input
-                          type="number"
-                          min={0}
-                          value={entry.weight}
-                          onChange={(event) => handleEntryChange(entry.id, { weight: Number(event.target.value) || 0 })}
-                          onBlur={autosave.handleBlur}
-                        />
-                        <p className="text-xs text-foreground/50">Higher weight increases selection odds.</p>
-                      </div>
+                      <WeightField
+                        weight={entry.weight}
+                        onChange={(weight) => handleEntryChange(entry.id, { weight })}
+                        onBlur={autosave.handleBlur}
+                        helperText="Higher weight increases selection odds."
+                      />
                       {(entry.type === 'dropped_item' || entry.type === 'given_item') ? (
                         <>
                           <div className="space-y-1">
@@ -2024,6 +2144,13 @@ export function LootTableEditor({
                         </div>
                       </div>
                     )}
+                    <div className="grid gap-3 sm:grid-cols-4">
+                      <ConditionField
+                        value={entry.condition}
+                        onChange={(condition) => handleEntryChange(entry.id, { condition })}
+                        onBlur={autosave.handleBlur}
+                      />
+                    </div>
                     </>)}
                   </div>
                 );
