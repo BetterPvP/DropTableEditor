@@ -169,7 +169,7 @@ export function ConditionField({ value, onChange, onBlur }: ConditionFieldProps)
         onBlur={onBlur}
       />
       <p className="text-xs text-foreground/50">
-        JEXL expression. Entry only drops when truthy. Available variables come from the table's inputs plus reserved names (roll_index, bundle_size, history_size, source).
+        JEXL expression. Entry only drops when truthy. Available variables come from the table&apos;s inputs plus reserved names (roll_index, bundle_size, history_size, source).
       </p>
     </div>
   );

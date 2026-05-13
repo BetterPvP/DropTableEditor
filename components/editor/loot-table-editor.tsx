@@ -1157,7 +1157,7 @@ export function LootTableEditor({
                 {definition.rollStrategy.type === 'EXPRESSION' && (
                   <div className="space-y-3 rounded-md border border-primary/30 bg-primary/8 p-4">
                     <p className="text-xs text-foreground/60">
-                      Evaluate a JEXL expression against the context's inputs to determine the roll count. Result is rounded to a non-negative integer.
+                      Evaluate a JEXL expression against the context&apos;s inputs to determine the roll count. Result is rounded to a non-negative integer.
                     </p>
                     <div className="space-y-1">
                       <Label htmlFor="expression-expr">Expression</Label>
