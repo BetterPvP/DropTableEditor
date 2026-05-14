@@ -285,7 +285,13 @@ export async function registerItemsAction(ids: string[]) {
 
   const { error } = await supabase
     .from('items')
-    .upsert(uniqueIds.map((id) => ({ id })), { onConflict: 'id', ignoreDuplicates: true });
+    .upsert(
+      uniqueIds.map((id) => ({
+        id,
+        name: id,
+      })),
+      { onConflict: 'id', ignoreDuplicates: true },
+    );
 
   if (error) {
     console.error('Failed to register items', error);
