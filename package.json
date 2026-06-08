@@ -12,7 +12,8 @@
     "db:apply": "node scripts/db-apply.mjs",
     "db:seed-manifest": "node scripts/seed-manifest.mjs",
     "db:bootstrap": "node scripts/dev-bootstrap.mjs",
-    "db:setup": "npm run db:apply && npm run db:seed-manifest && npm run db:bootstrap"
+    "db:seed-content": "node scripts/seed-content.mjs",
+    "db:setup": "npm run db:apply && npm run db:seed-manifest && npm run db:bootstrap && npm run db:seed-content"
   },
   "dependencies": {
     "@auth/pg-adapter": "^1.7.4",

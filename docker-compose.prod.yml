@@ -1,0 +1,44 @@
+# Production deployment — STANDALONE (Postgres lives on another machine).
+# Run on its own (do NOT combine with docker-compose.yml, which starts a local db):
+#
+#   docker compose -f docker-compose.prod.yml up --build -d
+#
+# Notes:
+#   • No local Postgres — DATABASE_URL points at your external DB (the single
+#     source of truth the game also reads). The VPS must be able to reach it.
+#   • The app binds to 127.0.0.1 only; Caddy reverse-proxies it over HTTPS.
+#   • Real secrets are required and fail fast if missing.
+#   • `migrate` runs once (applies schema + seeds the item manifest + inserts the
+#     invite code) against the external DB, then the app starts.
+#
+# Required .env (next to this file):
+#   DATABASE_URL=postgres://user:password@db-host:5432/betterpvp?sslmode=require
+#   AUTH_SECRET=<openssl rand -base64 32>
+#   AUTH_URL=https://console.yourdomain.com
+#   DEV_INVITE_CODE=<private signup code>
+
+services:
+  migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      DEV_INVITE_CODE: ${DEV_INVITE_CODE:?set DEV_INVITE_CODE in .env}
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: runner
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in .env}
+      AUTH_URL: ${AUTH_URL:?set AUTH_URL in .env}
+      NEXT_PUBLIC_APP_ENV: production
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
