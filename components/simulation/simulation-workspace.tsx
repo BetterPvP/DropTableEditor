@@ -1,700 +1,132 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { BarChart3, Loader2 } from 'lucide-react';
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip as RechartsTooltip } from 'recharts';
-
+import Link from 'next/link';
+import { useEffect, useRef, useState } from 'react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  LootEntry,
-  LootTableDefinition,
-  SimulationResult,
-  SimulationTimelineEventType,
-} from '@/lib/loot-tables/types';
+import type { LootTableDefinition, SimulationResult } from '@/lib/content/loot_table/schema';
 
-function computeAvgRolls(rollStrategy: LootTableDefinition['rollStrategy']): number {
-  if (rollStrategy.type === 'CONSTANT') return rollStrategy.rolls;
-  if (rollStrategy.type === 'RANDOM') return (rollStrategy.min + rollStrategy.max) / 2;
-  if (rollStrategy.type === 'PROGRESSIVE') return (rollStrategy.baseRolls + rollStrategy.maxRolls) / 2;
-  return 1;
-}
-
-function getEntryAvgQty(entry: LootEntry): number {
-  if (entry.type === 'dropped_item' || entry.type === 'given_item') return (entry.minYield + entry.maxYield) / 2;
-  if (
-    entry.type === 'dropped_coin' ||
-    entry.type === 'given_coin' ||
-    entry.type === 'dropped_clan_energy' ||
-    entry.type === 'given_clan_energy'
-  ) return (entry.minAmount + entry.maxAmount) / 2;
-  if (entry.type === 'clan_experience') return (entry.minXp + entry.maxXp) / 2;
-  if (entry.type === 'fish') return (entry.minWeight + entry.maxWeight) / 2;
-  if (entry.type === 'entity_spawn') return 1;
-  return 1;
-}
-import type { Database } from '@/supabase/types';
-
-interface SimulationWorkspaceProps {
+interface Props {
+  id: string;
+  name: string;
   definition: LootTableDefinition;
-  probabilities: Record<string, number>;
-  items: Database['public']['Tables']['items']['Row'][];
 }
 
-type SimulationWorkerMessage =
-  | { type: 'progress'; completed: number; total: number }
-  | { type: 'complete'; result: SimulationResult };
+function entryLabel(e: SimulationResult['entries'][number]): string {
+  return e.itemId ?? e.entryId.slice(0, 8);
+}
 
-type SimulationWorkerRequest = {
-  type: 'start';
-  definition: LootTableDefinition;
-  runs: number;
-  seed?: number;
-};
-
-type SortOption = 'yielded' | 'rollHits' | 'bundleHits' | 'probability' | 'name';
-
-const sortLabels: Record<SortOption, string> = {
-  yielded: 'Most yielded',
-  rollHits: 'Roll hits',
-  bundleHits: 'Bundles hit',
-  probability: 'Simulated %',
-  name: 'Alphabetical',
-};
-
-const timelineColors: Record<SimulationTimelineEventType, string> = {
-  appeared: 'bg-sky-400',
-  rolled: 'bg-emerald-400',
-  consumed: 'bg-rose-500',
-  granted: 'bg-amber-400',
-};
-
-const probabilityColors = ['#22d3ee', '#1f2937'];
-
-export function SimulationWorkspace({ definition, probabilities, items }: SimulationWorkspaceProps) {
-  const [runs, setRuns] = useState(1000);
-  const [seed, setSeed] = useState('');
-  const [result, setResult] = useState<SimulationResult | null>(null);
-  const [progress, setProgress] = useState(0);
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [selectedEntry, setSelectedEntry] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<SortOption>('yielded');
-  const [timelineView, setTimelineView] = useState<'roll' | 'run'>('roll');
+export function SimulationWorkspace({ id, name, definition }: Props) {
   const workerRef = useRef<Worker | null>(null);
+  const [runs, setRuns] = useState(10000);
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [result, setResult] = useState<SimulationResult | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (workerRef.current) {
-        workerRef.current.terminate();
-        workerRef.current = null;
-      }
-    };
-  }, []);
+  useEffect(() => () => workerRef.current?.terminate(), []);
 
-  useEffect(() => {
-    setTimelineView('roll');
-  }, [selectedEntry]);
-
-  const handleRun = () => {
-    if (runs <= 0) {
-      setError('Iteration count must be positive.');
-      return;
-    }
-    setRunning(true);
-    setError(null);
-    setProgress(0);
-    setResult(null);
-    setSelectedEntry(null);
-
-    if (workerRef.current) {
-      workerRef.current.terminate();
-      workerRef.current = null;
-    }
-
+  const run = () => {
+    workerRef.current?.terminate();
     const worker = new Worker(new URL('../../lib/workers/simulation.worker.ts', import.meta.url));
     workerRef.current = worker;
-    worker.onmessage = (event: MessageEvent<SimulationWorkerMessage>) => {
-      if (event.data.type === 'progress') {
-        const { completed, total } = event.data;
-        setProgress(total === 0 ? 0 : completed / total);
-      } else if (event.data.type === 'complete') {
-        setResult(event.data.result);
-        setProgress(1);
+    setRunning(true);
+    setProgress(0);
+    setResult(null);
+
+    worker.onmessage = (event: MessageEvent) => {
+      const msg = event.data;
+      if (msg.type === 'progress') {
+        setProgress(msg.total > 0 ? msg.completed / msg.total : 0);
+      } else if (msg.type === 'complete') {
+        setResult(msg.result as SimulationResult);
         setRunning(false);
-        workerRef.current?.terminate();
+        worker.terminate();
         workerRef.current = null;
       }
     };
-    worker.onerror = (event) => {
-      console.error('Simulation worker error', event);
-      setError('Simulation failed. Check console for details.');
-      setRunning(false);
-      workerRef.current?.terminate();
-      workerRef.current = null;
-    };
 
-    const payload: SimulationWorkerRequest = {
-      type: 'start',
-      definition,
-      runs,
-      seed: seed ? Number(seed) : undefined,
-    };
-
-    worker.postMessage(payload);
+    worker.postMessage({ type: 'start', definition, runs });
   };
 
-  const tableRows = useMemo(() => {
-    if (!result) return [];
-    const avgRolls = computeAvgRolls(definition.rollStrategy);
-    const allDefEntries = [...definition.entries, ...definition.guaranteed];
-    const rows = result.entries.map((entry) => {
-      const baseProbability = probabilities[entry.entryId] ?? 0;
-      const item = items.find((candidate) => candidate.id === entry.itemId);
-      const defEntry = allDefEntries.find((e) => e.id === entry.entryId);
-      const avgQty = defEntry ? getEntryAvgQty(defEntry) : 1;
-      const expectedValue = entry.source === 'guaranteed'
-        ? avgQty
-        : baseProbability * avgQty * avgRolls;
-      return {
-        ...entry,
-        baseProbability,
-        name: item?.name ?? entry.entryId,
-        expectedValue,
-        avgQty,
-      };
-    });
-
-    return rows.sort((a, b) => {
-      switch (sortBy) {
-        case 'yielded':
-          return b.totalDrops - a.totalDrops;
-        case 'rollHits':
-          return b.rollHits - a.rollHits;
-        case 'bundleHits':
-          return b.bundleHits - a.bundleHits;
-        case 'probability':
-          return b.probability - a.probability;
-        case 'name':
-          return a.name.localeCompare(b.name);
-        default:
-          return 0;
-      }
-    });
-  }, [items, probabilities, result, sortBy]);
-
-  const selectedRow = useMemo(() => {
-    if (!selectedEntry) return null;
-    return tableRows.find((entry) => entry.entryId === selectedEntry) ?? null;
-  }, [selectedEntry, tableRows]);
-
-  const rollTimelineEvents = useMemo(() => {
-    if (!selectedRow) return [];
-    return selectedRow.timeline.filter((event) => event.type !== 'granted');
-  }, [selectedRow]);
-
-  const runTimelineEvents = useMemo(() => {
-    if (!selectedRow) return [];
-    const summaries = new Map<
-      number,
-      {
-        run: number;
-        rolled: boolean;
-        granted: boolean;
-        rolledQuantity: number;
-        grantedQuantity: number;
-      }
-    >();
-    for (const event of selectedRow.timeline) {
-      if (event.type !== 'rolled' && event.type !== 'granted') continue;
-      const entry =
-        summaries.get(event.run) ?? {
-          run: event.run,
-          rolled: false,
-          granted: false,
-          rolledQuantity: 0,
-          grantedQuantity: 0,
-        };
-      if (event.type === 'rolled') {
-        entry.rolled = true;
-        entry.rolledQuantity += event.quantity ?? 0;
-      }
-      if (event.type === 'granted') {
-        entry.granted = true;
-        entry.grantedQuantity += event.quantity ?? 0;
-      }
-      summaries.set(event.run, entry);
-    }
-    return Array.from(summaries.values()).sort((a, b) => a.run - b.run);
-  }, [selectedRow]);
+  const chartData = result
+    ? [...result.entries].sort((a, b) => b.probability - a.probability).map((e) => ({
+        name: entryLabel(e),
+        probability: Number((e.probability * 100).toFixed(2)),
+      }))
+    : [];
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-[1fr,1fr]">
-        <Card>
-          <CardHeader>
-            <CardTitle>Simulation parameters</CardTitle>
-            <CardDescription>Choose the number of runs and deterministic seed.</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="runs">Runs</Label>
-              <Input
-                id="runs"
-                type="number"
-                min={1}
-                value={runs}
-                onChange={(event) => setRuns(Number(event.target.value))}
-              />
-              <p className="text-xs text-foreground/50">More runs improve accuracy at the cost of longer execution time.</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="seed">Seed</Label>
-              <Input
-                id="seed"
-                placeholder="Optional seed"
-                value={seed}
-                onChange={(event) => setSeed(event.target.value)}
-              />
-              <p className="text-xs text-foreground/50">Using the same seed reproduces results for regression testing.</p>
-            </div>
-            <Button type="button" className="justify-between" onClick={handleRun} disabled={running}>
-              {running ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Running…
-                </>
-              ) : (
-                <>
-                  Execute
-                  <BarChart3 className="h-4 w-4" />
-                </>
-              )}
-            </Button>
-            {error && <p className="text-xs text-destructive">{error}</p>}
-            {running && (
-              <div className="h-2 w-full overflow-hidden rounded-sm bg-muted/60">
-                <div className="h-full bg-primary transition-all" style={{ width: `${Math.min(1, progress) * 100}%` }} />
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Run summary</CardTitle>
-            <CardDescription>Overview of the latest simulation run.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-foreground/70">
-            {result ? (
-              <>
-                <div className="flex items-center justify-between">
-                  <span>Runs completed</span>
-                  <span className="font-semibold">{result.runs.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Duration</span>
-                  <span className="font-semibold">{result.durationMs} ms</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Unique entries</span>
-                  <span className="font-semibold">{result.entries.length}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Total rolls</span>
-                  <span className="font-semibold">{result.totalRolls.toLocaleString()}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Total yielded</span>
-                  <span className="font-semibold">
-                    {result.entries.reduce((sum, entry) => sum + entry.totalDrops, 0).toLocaleString()}
-                  </span>
-                </div>
-                {tableRows.length > 0 && (
-                  <>
-                    <div className="flex items-center justify-between">
-                      <span>Top yield</span>
-                      <span className="font-semibold truncate max-w-[150px]" title={tableRows[0]?.name}>
-                        {tableRows[0]?.name}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Lowest yield</span>
-                      <span
-                        className="font-semibold truncate max-w-[150px]"
-                        title={tableRows[tableRows.length - 1]?.name}
-                      >
-                        {tableRows[tableRows.length - 1]?.name}
-                      </span>
-                    </div>
-                  </>
-                )}
-              </>
-            ) : (
-              <p>No simulation data yet. Configure parameters and execute to see results.</p>
-            )}
-          </CardContent>
-        </Card>
+    <div className="flex flex-col gap-6">
+      <div className="space-y-1">
+        <Link href={`/loot-tables/${id}`} className="text-sm text-foreground/50 hover:text-primary">← {name}</Link>
+        <h1 className="text-2xl font-semibold">Simulate · {name}</h1>
+        <p className="text-sm text-foreground/60">
+          Monte-Carlo preview using the in-browser roller. EXPRESSION weights use their fallback/preview value.
+        </p>
       </div>
-      <Card>
-        <CardHeader>
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <CardTitle>Per-entry results</CardTitle>
-              <CardDescription>
-                Compare base probabilities to the observed distribution. Totals include yielded amounts for item entries.
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-foreground/60">Sort by</span>
-              <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(sortLabels).map(([key, label]) => (
-                    <SelectItem key={key} value={key}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+
+      <div className="glass-panel flex items-end gap-4 rounded-lg border p-4">
+        <div className="space-y-1.5">
+          <Label className="text-xs uppercase tracking-wide text-foreground/50">Runs</Label>
+          <Input type="number" className="w-40" value={runs} onChange={(e) => setRuns(Math.max(1, parseInt(e.target.value, 10) || 1))} />
+        </div>
+        <Button type="button" onClick={run} disabled={running}>{running ? 'Running…' : 'Run simulation'}</Button>
+        {running && (
+          <div className="flex-1">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+              <div className="h-full bg-primary transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-4">
-          <ScrollArea className="flex-1 min-h-[400px] max-h-[600px] rounded-md border bg-muted/30">
-            <table className="w-full text-sm text-foreground/80">
-              <thead className="sticky top-0 bg-background text-xs uppercase tracking-wide text-foreground/60">
+        )}
+      </div>
+
+      {result && (
+        <>
+          <div className="glass-panel rounded-lg border p-4">
+            <div className="mb-3 text-sm text-foreground/60">
+              {result.runs.toLocaleString()} runs · {result.totalRolls.toLocaleString()} rolls · {result.durationMs} ms
+            </div>
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 8, right: 16, bottom: 40, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis dataKey="name" angle={-30} textAnchor="end" interval={0} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                  <YAxis tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} unit="%" />
+                  <Tooltip contentStyle={{ background: 'hsl(var(--popover))', border: '1px solid hsl(var(--border))' }} />
+                  <Bar dataKey="probability" fill="hsl(var(--primary))" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          <div className="glass-panel overflow-hidden rounded-lg border">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-foreground/50">
                 <tr>
-                  <th className="px-3 py-2 text-left">Loot</th>
-                  <th className="px-3 py-2 text-right">Type</th>
-                  <th className="px-3 py-2 text-right">Yielded</th>
-                  <th className="px-3 py-2 text-right">Avg</th>
-                  <th className="px-3 py-2 text-right">Roll hits</th>
-                  <th className="px-3 py-2 text-right">Bundle hits</th>
-                  <th className="px-3 py-2 text-right">Sim %</th>
-                  <th className="px-3 py-2 text-right">Base %</th>
-                  <th className="px-3 py-2 text-right" title="Expected quantity per run (probability × avg qty × avg rolls)">EV/run</th>
-                  <th className="px-3 py-2 text-right">First</th>
+                  <th className="px-4 py-2">Entry</th>
+                  <th className="px-4 py-2">Type</th>
+                  <th className="px-4 py-2 text-right">Drop chance</th>
+                  <th className="px-4 py-2 text-right">Avg / run</th>
+                  <th className="px-4 py-2 text-right">Total drops</th>
                 </tr>
               </thead>
               <tbody>
-                {tableRows.length === 0 && (
-                  <tr>
-                    <td className="px-4 py-6 text-center text-foreground/50" colSpan={10}>
-                      Run the simulation to populate this table.
-                    </td>
-                  </tr>
-                )}
-                {tableRows.map((entry) => (
-                  <tr
-                    key={entry.entryId}
-                    className={`cursor-pointer border-b border-border/40 transition-colors hover:bg-muted/60 ${selectedEntry === entry.entryId ? 'bg-primary/12' : ''}`}
-                    onClick={() => setSelectedEntry(selectedEntry === entry.entryId ? null : entry.entryId)}
-                  >
-                    <td className="px-3 py-2">{entry.name}</td>
-                    <td className="px-3 py-2 text-right text-xs">
-                      {entry.source === 'guaranteed'
-                        ? 'Guaranteed'
-                        : entry.type === 'dropped_item' || entry.type === 'fish'
-                          ? 'Drop'
-                          : entry.type === 'entity_spawn'
-                            ? 'Entity spawn'
-                            : 'Give'}
-                    </td>
-                    <td className="px-3 py-2 text-right">{entry.totalDrops.toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right">{entry.perRunAverage.toFixed(2)}</td>
-                    <td className="px-3 py-2 text-right">{entry.rollHits.toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right">{entry.bundleHits.toLocaleString()}</td>
-                    <td className="px-3 py-2 text-right">{(entry.probability * 100).toFixed(2)}%</td>
-                    <td className="px-3 py-2 text-right">{(entry.baseProbability * 100).toFixed(2)}%</td>
-                    <td className="px-3 py-2 text-right text-foreground/70" title={`${entry.source === 'guaranteed' ? 'Guaranteed' : `${(entry.baseProbability * 100).toFixed(2)}% × `}avg qty ${entry.avgQty.toFixed(2)}`}>
-                      {entry.expectedValue.toFixed(3)}
-                    </td>
-                    <td className="px-3 py-2 text-right text-xs">
-                      {entry.firstAppearedAt ? `#${entry.firstAppearedAt}` : 'Never'}
-                    </td>
+                {result.entries.map((e) => (
+                  <tr key={e.entryId} className="border-t border-border/50">
+                    <td className="px-4 py-2">{entryLabel(e)}</td>
+                    <td className="px-4 py-2 text-foreground/60">{e.type}</td>
+                    <td className="px-4 py-2 text-right">{(e.probability * 100).toFixed(2)}%</td>
+                    <td className="px-4 py-2 text-right">{e.perRunAverage.toFixed(3)}</td>
+                    <td className="px-4 py-2 text-right">{e.totalDrops.toLocaleString()}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </ScrollArea>
-          {selectedRow && result && (
-            <div className="rounded-md border border-primary/30 bg-primary/8 p-4">
-              <h3 className="text-sm font-semibold text-white mb-3">Detailed Information: {selectedRow.name}</h3>
-              <div className="grid gap-3 md:grid-cols-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-foreground/60">Entry Type:</span>
-                  <span className="text-foreground/90">
-                    {selectedRow.source === 'guaranteed'
-                      ? `Guaranteed ${selectedRow.type === 'dropped_item' || selectedRow.type === 'fish' ? 'Drop' : selectedRow.type === 'entity_spawn' ? 'Entity spawn' : 'Give'}`
-                      : selectedRow.type === 'dropped_item' || selectedRow.type === 'fish'
-                        ? 'Dropped Item'
-                        : selectedRow.type === 'entity_spawn'
-                          ? 'Entity Spawn'
-                          : 'Given Item'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-foreground/60">Total Yield:</span>
-                  <span className="text-foreground/90 font-semibold">{selectedRow.totalDrops.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-foreground/60">Per-Run Average:</span>
-                  <span className="text-foreground/90 font-semibold">{selectedRow.perRunAverage.toFixed(3)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-foreground/60">Simulated Probability:</span>
-                  <span className="text-foreground/90 font-semibold">{(selectedRow.probability * 100).toFixed(3)}%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-foreground/60">Base Probability:</span>
-                  <span className="text-foreground/90 font-semibold">{(selectedRow.baseProbability * 100).toFixed(3)}%</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-foreground/60">Variance:</span>
-                  <span className="text-foreground/90 font-semibold">
-                    {((selectedRow.probability - selectedRow.baseProbability) * 100).toFixed(3)}%
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-foreground/60">Avg Qty per Selection:</span>
-                  <span className="text-foreground/90 font-semibold">{selectedRow.avgQty.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between col-span-2 rounded-md border border-primary/20 bg-primary/5 px-3 py-2">
-                  <span className="text-foreground/70 font-medium">Expected Value / run</span>
-                  <span className="text-white font-semibold">
-                    {selectedRow.source === 'guaranteed'
-                      ? `${selectedRow.expectedValue.toFixed(3)} (always)`
-                      : `${selectedRow.expectedValue.toFixed(3)}`}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-foreground/60">First Run Appearance:</span>
-                  <span className="text-foreground/90">
-                    {selectedRow.firstRunAppearance
-                      ? `Run #${selectedRow.firstRunAppearance}`
-                      : 'Never appeared'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-foreground/60">First Roll Appearance:</span>
-                  <span className="text-foreground/90">
-                    {selectedRow.firstAppearedAt
-                      ? `Roll #${selectedRow.firstAppearedAt}`
-                      : selectedRow.source === 'guaranteed'
-                        ? 'Not rolled'
-                        : 'Never appeared'}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-foreground/60">Roll Hits:</span>
-                  <span className="text-foreground/90">{selectedRow.rollHits.toLocaleString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-foreground/60">Bundles Hit:</span>
-                  <span className="text-foreground/90">{selectedRow.bundleHits.toLocaleString()}</span>
-                </div>
-              </div>
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <div className="rounded-md border bg-muted/30 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Timeline</h4>
-                    <div className="inline-flex gap-2 rounded-sm border bg-background p-1">
-                      <Button
-                        type="button"
-                        variant={timelineView === 'roll' ? 'default' : 'ghost'}
-                        size="sm"
-                        className="h-8 px-3 text-xs"
-                        onClick={() => setTimelineView('roll')}
-                      >
-                        Roll timeline
-                      </Button>
-                      <Button
-                        type="button"
-                        variant={timelineView === 'run' ? 'default' : 'ghost'}
-                        size="sm"
-                        className="h-8 px-3 text-xs"
-                        onClick={() => setTimelineView('run')}
-                      >
-                        Run timeline
-                      </Button>
-                    </div>
-                  </div>
-                  {timelineView === 'roll' ? (
-                    rollTimelineEvents.length === 0 ? (
-                      <p className="mt-3 text-sm text-foreground/60">No roll events recorded for this entry.</p>
-                    ) : (
-                      <div className="mt-4">
-                        <div className="relative h-24">
-                          <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-border" />
-                          {(() => {
-                            const maxRoll = Math.max(...rollTimelineEvents.map((event) => event.rollIndex));
-                            return rollTimelineEvents.map((event, index) => {
-                              const percent = maxRoll <= 1 ? 0 : ((event.rollIndex - 1) / (maxRoll - 1)) * 100;
-                              const tooltipLabel = [
-                                event.type === 'rolled'
-                                  ? `Rolled x${event.quantity ?? 1}`
-                                  : event.type === 'appeared'
-                                    ? 'Appeared'
-                                    : 'Consumed',
-                                `Roll #${event.rollIndex}`,
-                                `Run #${event.run + 1}`,
-                              ].join(' · ');
-                              return (
-                                <div
-                                  key={`${event.type}-${index}-${event.rollIndex}`}
-                                  className="absolute flex -translate-x-1/2 flex-col items-center text-[10px] text-foreground/70"
-                                  style={{ left: `${percent}%` }}
-                                >
-                                  <span
-                                    className={`h-4 w-4 rounded-full border border-white/40 ${timelineColors[event.type]}`}
-                                    title={tooltipLabel}
-                                  />
-                                  <span className="mt-1">#{event.rollIndex}</span>
-                                </div>
-                              );
-                            });
-                          })()}
-                        </div>
-                        <div className="mt-4 flex flex-wrap gap-3 text-[10px] uppercase tracking-wide text-foreground/50">
-                          {(() => {
-                            const types = new Set(rollTimelineEvents.map((event) => event.type));
-                            return (
-                              <>
-                                {types.has('appeared') && (
-                                  <span className="flex items-center gap-1">
-                                    <span className="h-2 w-2 rounded-full bg-sky-400" /> Appeared
-                                  </span>
-                                )}
-                                {types.has('rolled') && (
-                                  <span className="flex items-center gap-1">
-                                    <span className="h-2 w-2 rounded-full bg-emerald-400" /> Rolled
-                                  </span>
-                                )}
-                                {types.has('consumed') && (
-                                  <span className="flex items-center gap-1">
-                                    <span className="h-2 w-2 rounded-full bg-rose-500" /> Consumed
-                                  </span>
-                                )}
-                              </>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    )
-                  ) : runTimelineEvents.length === 0 ? (
-                    <p className="mt-3 text-sm text-foreground/60">This entry never appeared in any run.</p>
-                  ) : (
-                    <div className="mt-4">
-                      <div className="relative h-24">
-                        <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-1/2 bg-white/20" />
-                        {(() => {
-                          const totalRuns = result?.runs ?? 0;
-                          const denominator = Math.max(totalRuns - 1, 1);
-                          return runTimelineEvents.map((event, index) => {
-                            const percent = totalRuns <= 1 ? 0 : (event.run / denominator) * 100;
-                            const labels = [
-                              event.rolled
-                                ? `Rolled${event.rolledQuantity ? ` x${event.rolledQuantity}` : ''}`
-                                : null,
-                              event.granted
-                                ? `Guaranteed${event.grantedQuantity ? ` x${event.grantedQuantity}` : ''}`
-                                : null,
-                              `Run #${event.run + 1}`,
-                            ].filter(Boolean) as string[];
-                            const colorKey: SimulationTimelineEventType = event.rolled ? 'rolled' : 'granted';
-                            return (
-                              <div
-                                key={`run-${event.run}-${index}`}
-                                className="absolute flex -translate-x-1/2 flex-col items-center text-[10px] text-foreground/70"
-                                style={{ left: `${percent}%` }}
-                              >
-                                <span
-                                  className={`h-4 w-4 rounded-full border border-white/40 ${timelineColors[colorKey]}`}
-                                  title={labels.join(' · ')}
-                                />
-                                <span className="mt-1">#{event.run + 1}</span>
-                              </div>
-                            );
-                          });
-                        })()}
-                      </div>
-                      <div className="mt-4 flex flex-wrap gap-3 text-[10px] uppercase tracking-wide text-foreground/50">
-                        <span className="flex items-center gap-1">
-                          <span className="h-2 w-2 rounded-full bg-emerald-400" /> Rolled Run
-                        </span>
-                        {runTimelineEvents.some((event) => event.granted) && (
-                          <span className="flex items-center gap-1">
-                            <span className="h-2 w-2 rounded-full bg-amber-400" /> Guaranteed Run
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-                <div className="rounded-md border bg-muted/30 p-4">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Probability weight</h4>
-                  <div className="mt-4 h-48">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          dataKey="value"
-                          data={[
-                            { name: selectedRow.name, value: selectedRow.baseProbability },
-                            { name: 'Others', value: Math.max(0, 1 - selectedRow.baseProbability) },
-                          ]}
-                          innerRadius={40}
-                          outerRadius={80}
-                          paddingAngle={2}
-                        >
-                          {[0, 1].map((index) => (
-                            <Cell key={`slice-${index}`} fill={probabilityColors[index]} />
-                          ))}
-                        </Pie>
-                        <RechartsTooltip
-                          formatter={(value: number, name: string) => [`${(value * 100).toFixed(2)}%`, name]}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <p className="mt-2 text-xs text-foreground/60">
-                    Shows the base probability weight of this entry relative to the rest of the table.
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 rounded-md border bg-muted/30 p-4">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-foreground/60">Heat indicator</h4>
-                {(() => {
-                  const expectedHits = selectedRow.baseProbability * result.totalRolls;
-                  const ratio = expectedHits === 0 ? 0 : selectedRow.rollHits / expectedHits;
-                  const clamped = Math.max(0, Math.min(2, ratio));
-                  const widthPercent = `${Math.round(clamped * 50)}%`;
-                  const color = ratio > 1.25 ? 'bg-rose-500' : ratio < 0.75 ? 'bg-sky-500' : 'bg-emerald-500';
-                  return (
-                    <div className="mt-3 space-y-2">
-                      <div className="flex items-center justify-between text-xs text-foreground/70">
-                        <span>Observed vs expected</span>
-                        <span className="font-semibold text-white">{ratio ? ratio.toFixed(2) : '0.00'}x</span>
-                      </div>
-                      <div className="h-3 w-full overflow-hidden rounded-sm bg-muted/60">
-                        <div className={`h-full ${color}`} style={{ width: widthPercent }} />
-                      </div>
-                      <div className="flex justify-between text-[11px] text-foreground/50">
-                        <span>{`Expected hits: ${expectedHits.toFixed(2)}`}</span>
-                        <span>{`Observed: ${selectedRow.rollHits.toLocaleString()}`}</span>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </div>
+        </>
+      )}
     </div>
   );
 }

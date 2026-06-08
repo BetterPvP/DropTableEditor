@@ -1,82 +1,62 @@
-# BetterPvP Admin Console (Next.js)
+# BetterPvP Admin Console
 
-Modernized administration console for the BetterPvP **Clans** loot table tooling. This repository contains a Next.js App Router implementation that embraces server-first rendering, shadcn/ui components, Supabase auth, and a dark glassmorphism aesthetic inspired by JetBrains IDEs.
+Authoring console for BetterPvP content: **drop tables, storylines (sagas), quests, conversations, and cinematics**. Next.js App Router + shadcn/ui, connected directly to the **game's PostgreSQL** (the single source of truth), with a draft → published boundary the game reads live.
 
-## Getting Started
+## Architecture in one breath
 
-### Prerequisites
-- Node.js 18+
-- npm 9+
-- Supabase project with existing BetterPvP schema
+- Every artifact is one `content` row with a `type` and a `draft`/`published` JSONB pair. Writers edit `draft`; the game reads `published`.
+- Publishing validates, copies draft → published, writes a snapshot, and fires `pg_notify('content_published', <id>)` for the game to hot-reload.
+- One `/[type]` + `/[type]/[id]` route pair, driven by the content-type registry (`lib/content/registry.ts`).
+- Sagas, quests and conversations share one **graph engine** (React Flow). Cinematics use a **timeline** editor. Loot tables use the ported **form** editor.
+- Triggers/conditions/actions/requirements/rewards are **self-describing primitives** (`lib/primitives/`) — the inspector renders forms from their specs. Mirrors the game's future `quest_primitives` table.
 
-### Installation
+## Getting started
+
 ```bash
+cp .env.example .env        # set DATABASE_URL + AUTH_SECRET (npx auth secret)
 npm install
+npm run db:apply            # create/verify schema from db/sql/*.sql (idempotent)
+npm run db:seed-manifest    # dev: fill game_items/zones/npcs/professions/primitives
+npm run dev                 # http://localhost:3000
 ```
 
-### Development
-```bash
-npm run dev
+Production: `npm run build && npm start`. Tests: `npm test` (Vitest) · `npm run test:e2e` (Playwright).
+
+## Environment
+
 ```
-
-The development server starts on [http://localhost:3000](http://localhost:3000). Hot reloading is enabled.
-
-### Production Build
-```bash
-npm run build
-npm start
-```
-
-### Tests
-- Unit & integration: `npm test`
-- Playwright e2e: `npm run test:e2e`
-
-## Environment Variables
-Create a `.env.local` file with the following variables:
-```
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-public-anon-key
+DATABASE_URL=postgres://…       # the game's Postgres (shared source of truth)
+AUTH_SECRET=…                   # Auth.js v5 secret
+AUTH_URL=http://localhost:3000
 NEXT_PUBLIC_APP_ENV=development
 ```
 
-## Project Structure
+## Database & the game contract
+
+`db/sql/*.sql` is the **canonical DDL** (authoring tables + game manifest tables). It is the contract to be reproduced as Flyway migrations in the game's `core` module when the game side is built — the console never migrates the production DB. See `db/README.md`.
+
+## Project structure
+
 ```
-app/                # App Router routes (SSR-first)
-components/         # shadcn-style UI primitives & feature components
-lib/                # Utilities, hooks, and sample data
-supabase/           # Client/server Supabase helpers
-sample_data/        # Legacy loot table fixtures for parity validation
+app/(dashboard)/[type]/...   # generic content index + editor routes (+ /simulate for loot)
+app/(auth)/ or app/auth/...  # Auth.js sign-in / sign-up (invite-gated)
+components/editor/           # loot form editor, shared header, version history
+components/graph/            # React Flow canvas + generic graph editor
+components/content/          # saga / quest / conversation / cinematic editors
+components/primitives/       # primitive form + list editor
+components/simulation/       # loot Monte-Carlo workspace (Web Worker + Recharts)
+lib/db/                      # Kysely client + typed repositories
+lib/content/                 # registry, per-type schemas, server actions, manifest loader
+lib/primitives/              # primitive registry + types
+lib/graph/                   # graph types + validation lints
+lib/editor/                  # useContentEditor (autosave + publish + delete)
+db/sql/                      # canonical DDL (Flyway contract)
 ```
 
-Key routes:
-- `/` – Landing page with hero and tools showcase
-- `/auth/sign-in`, `/auth/sign-up` – Supabase auth with invite code enforcement (stubbed API handler)
-- `/loot-tables` – Searchable index
-- `/loot-tables/[id]` – Three-pane editor shell with autosave, inspector, and simulation drawer placeholder
-- `/loot-tables/new` – Draft creator experience using hybrid autosave
-- `/settings` – Account preferences stub
+Routes: `/` landing · `/auth/sign-in|sign-up` · `/loot-tables` `/sagas` `/quests` `/conversations` `/cinematics` (+ `/[id]` editors) · `/reference/items` · `/insights`.
 
-## Styling & Components
-- Tailwind CSS + CSS variables for glassmorphism
-- shadcn-inspired components (`button`, `badge`, `card`, etc.)
-- Theme controls include a “Reduce glass” accessibility toggle stored in `localStorage`
+## Notes
 
-## Autosave Hook
-`useAutosave` implements a hybrid strategy combining debounce, on-blur, periodic, and before-unload saves while persisting crash-safe drafts to `localStorage`.
-
-## Simulation Worker (placeholder)
-The UI includes a simulation drawer entry point. The worker and metrics engine can be implemented in `components/simulation` alongside a `simulation.worker.ts` module.
-
-## Invite Codes API (stub)
-`/api/invite/validate` currently validates against a static allow list (`ADMIN-1234`, `DEV-SPACE`). Replace with Supabase-backed validation plus RLS enforcement in production.
-
-## Legacy Schema Parity
-Sample loot tables from the original Vite editor live under `sample_data/`. Use them for parity tests ensuring exported JSON remains byte-identical.
-
-## Tooling Notes
-- TanStack Query handles client-side fetching
-- Zod powers form validation and API route guards
-- Recharts, Web Workers, and deeper Supabase integration are ready to be wired into the new structure
-
-## License
-Internal BetterPvP tooling – not for public redistribution.
+- **Auth**: Auth.js v5, Credentials + JWT, invite-gated sign-up. Edge-safe middleware (`auth.config.ts`) is split from the Node config (`auth.ts`).
+- **Concurrency**: optimistic locking via a `revision` counter (a stale save prompts reload). Real-time collaboration is deferred.
+- **Insights**: content counts + cross-references (from the `content_links` cache) are live; Loki quest funnels activate once the game emits telemetry.

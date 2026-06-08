@@ -1,0 +1,321 @@
+import { z } from 'zod';
+
+// ─────────────────────────────────────────────────────────────────────────
+// Loot-table domain model — ported verbatim from the previous console's
+// lib/loot-tables/types.ts. Behaviour is intentionally UNCHANGED; only the
+// home moved (it is now the `loot_table` content type). A makeDefault factory
+// is appended at the bottom for the content backbone.
+// ─────────────────────────────────────────────────────────────────────────
+
+export const replacementStrategies = ['UNSET', 'WITH_REPLACEMENT', 'WITHOUT_REPLACEMENT'] as const;
+export type ReplacementStrategy = (typeof replacementStrategies)[number];
+
+export const lootTypes = [
+  'dropped_item',
+  'given_item',
+  'dropped_coin',
+  'given_coin',
+  'dropped_clan_energy',
+  'given_clan_energy',
+  'clan_experience',
+  'fish',
+  'entity_spawn',
+] as const;
+export type LootType = (typeof lootTypes)[number];
+
+export const coinTypes = ['SMALL_NUGGET', 'LARGE_NUGGET', 'BAR'] as const;
+export type CoinType = (typeof coinTypes)[number];
+
+export const energyTypes = ['SHARD', 'SMALL_CRYSTAL', 'LARGE_CRYSTAL', 'GIANT_CRYSTAL'] as const;
+export type EnergyType = (typeof energyTypes)[number];
+
+export const awardStrategyTypes = ['DEFAULT', 'LOOT_CHEST'] as const;
+export type AwardStrategyType = (typeof awardStrategyTypes)[number];
+
+export const lootChestTypes = ['BIG', 'SMALL', 'CUSTOM'] as const;
+export type LootChestType = (typeof lootChestTypes)[number];
+
+const soundEffectSchema = z.object({
+  key: z.string(),
+  pitch: z.number().nonnegative().default(1),
+  volume: z.number().nonnegative().default(1),
+});
+
+const defaultAwardStrategySchema = z.object({
+  type: z.literal('DEFAULT'),
+});
+
+const lootChestAwardStrategySchema = z.union([
+  z.object({
+    type: z.literal('LOOT_CHEST'),
+    chestType: z.union([z.literal('BIG'), z.literal('SMALL')]),
+  }),
+  z.object({
+    type: z.literal('LOOT_CHEST'),
+    chestType: z.literal('CUSTOM'),
+    mythicMobName: z.string().default(''),
+    soundEffect: soundEffectSchema.default({ key: '', pitch: 1, volume: 1 }),
+    dropDelay: z.number().int().nonnegative().default(0),
+    dropInterval: z.number().int().nonnegative().default(0),
+  }),
+]);
+
+export const awardStrategySchema = z.union([defaultAwardStrategySchema, lootChestAwardStrategySchema]);
+
+export type AwardStrategy = z.infer<typeof awardStrategySchema>;
+
+export const weightDistributionStrategies = ['STATIC', 'PITY', 'PROGRESSIVE'] as const;
+export type WeightDistributionStrategy = (typeof weightDistributionStrategies)[number];
+
+export const rollStrategySchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('CONSTANT'), rolls: z.number().int().positive().default(1) }),
+  z.object({
+    type: z.literal('PROGRESSIVE'),
+    baseRolls: z.number().int().positive(),
+    rollIncrement: z.number().nonnegative(),
+    maxRolls: z.number().int().positive(),
+  }),
+  z.object({
+    type: z.literal('RANDOM'),
+    min: z.number().int().nonnegative(),
+    max: z.number().int().positive(),
+  }),
+  z.object({
+    type: z.literal('EXPRESSION'),
+    expression: z.string().min(1),
+    fallback: z.number().int().nonnegative().default(0),
+  }),
+]);
+
+export type RollStrategy = z.infer<typeof rollStrategySchema>;
+
+/**
+ * An entry weight. A plain integer is a constant weight; the object form
+ * evaluates {@code expression} at roll time, falling back to {@code fallback}
+ * and using {@code preview} for menu/probability previews.
+ */
+export const entryWeightSchema = z.union([
+  z.number().nonnegative(),
+  z.object({
+    type: z.literal('CONSTANT'),
+    value: z.number().nonnegative(),
+  }),
+  z.object({
+    type: z.literal('EXPRESSION'),
+    expression: z.string().min(1),
+    fallback: z.number().nonnegative().default(0),
+    preview: z.number().nonnegative().default(0),
+  }),
+]);
+
+export type EntryWeight = z.infer<typeof entryWeightSchema>;
+
+/** Returns the numeric value used for previews/probabilities. */
+export function getPreviewWeight(weight: EntryWeight): number {
+  if (typeof weight === 'number') return weight;
+  if (weight.type === 'CONSTANT') return weight.value;
+  return weight.preview;
+}
+
+export const lootEntryBaseSchema = z.object({
+  id: z.string(),
+  type: z.enum(lootTypes),
+  weight: entryWeightSchema.default(0),
+  /** Optional JEXL expression evaluated against context inputs. Loot drops only when truthy. */
+  condition: z.string().optional(),
+  replacementStrategy: z.enum(replacementStrategies).default('UNSET'),
+});
+
+export const itemLootSchema = lootEntryBaseSchema.extend({
+  type: z.union([z.literal('dropped_item'), z.literal('given_item')]),
+  itemId: z.string(),
+  minYield: z.number().int().nonnegative().default(0),
+  maxYield: z.number().int().positive().default(1),
+});
+
+export type ItemLoot = z.infer<typeof itemLootSchema>;
+
+export const coinLootSchema = lootEntryBaseSchema.extend({
+  type: z.union([z.literal('dropped_coin'), z.literal('given_coin')]),
+  coinType: z.enum(coinTypes),
+  minAmount: z.number().int().nonnegative().default(1),
+  maxAmount: z.number().int().positive().default(1),
+});
+
+export type CoinLoot = z.infer<typeof coinLootSchema>;
+
+export const clanEnergyLootSchema = lootEntryBaseSchema.extend({
+  type: z.union([z.literal('dropped_clan_energy'), z.literal('given_clan_energy')]),
+  energyType: z.enum(energyTypes),
+  minAmount: z.number().int().nonnegative().default(1),
+  maxAmount: z.number().int().positive().default(1),
+  autoDeposit: z.boolean().default(false),
+});
+
+export type ClanEnergyLoot = z.infer<typeof clanEnergyLootSchema>;
+
+export const clanExperienceLootSchema = lootEntryBaseSchema.extend({
+  type: z.literal('clan_experience'),
+  minXp: z.number().int().nonnegative().default(100),
+  maxXp: z.number().int().positive().default(100),
+});
+
+export type ClanExperienceLoot = z.infer<typeof clanExperienceLootSchema>;
+
+export const fishLootSchema = lootEntryBaseSchema.extend({
+  type: z.literal('fish'),
+  itemId: z.string(),
+  displayName: z.string().default(''),
+  minWeight: z.number().int().nonnegative().default(1),
+  maxWeight: z.number().int().positive().default(1),
+});
+export type FishLoot = z.infer<typeof fishLootSchema>;
+
+export const entitySpawnLootSchema = lootEntryBaseSchema.extend({
+  type: z.literal('entity_spawn'),
+  entityType: z.string().regex(/^[A-Z][A-Z0-9_]*$/, 'Use uppercase EntityType enum name'),
+  launchAtSource: z.boolean().default(false),
+  pdcMarkerKey: z.string().optional(),
+});
+export type EntitySpawnLoot = z.infer<typeof entitySpawnLootSchema>;
+
+export const lootEntrySchema = z.union([
+  itemLootSchema,
+  coinLootSchema,
+  clanEnergyLootSchema,
+  clanExperienceLootSchema,
+  fishLootSchema,
+  entitySpawnLootSchema,
+]);
+
+export type LootEntry = z.infer<typeof lootEntrySchema>;
+
+export const pityRuleSchema = z.object({
+  entryId: z.string(),
+  maxAttempts: z.number().int().positive(),
+  weightIncrement: z.number().nonnegative(),
+});
+
+export type PityRule = z.infer<typeof pityRuleSchema>;
+
+export const progressiveConfigSchema = z.object({
+  maxShift: z.number().nonnegative().default(0),
+  shiftFactor: z.number().nonnegative().default(0),
+  varianceScaling: z.boolean().default(false),
+});
+
+export type ProgressiveConfig = z.infer<typeof progressiveConfigSchema>;
+
+/** Documents an input variable that callers populate when invoking this table. */
+export const inputDeclarationSchema = z.object({
+  key: z.string().min(1),
+  description: z.string().default(''),
+  defaultValue: z.union([z.number(), z.string(), z.boolean()]).optional(),
+});
+
+export type InputDeclaration = z.infer<typeof inputDeclarationSchema>;
+
+/** Reserved input names supplied automatically by the loot system. */
+export const RESERVED_INPUT_KEYS = ['roll_index', 'bundle_size', 'history_size', 'source'] as const;
+
+export const lootTableDefinitionSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional(),
+  notes: z.string().optional(),
+  replacementStrategy: z.enum(replacementStrategies).default('UNSET'),
+  rollStrategy: rollStrategySchema,
+  weightDistribution: z.enum(weightDistributionStrategies).default('STATIC'),
+  pityRules: z.array(pityRuleSchema).default([]),
+  progressive: progressiveConfigSchema.optional(),
+  awardStrategy: awardStrategySchema.default({ type: 'DEFAULT' }),
+  entries: z.array(lootEntrySchema),
+  guaranteed: z.array(lootEntrySchema).default([]),
+  /** Declared inputs that callers populate for this table's expressions. */
+  inputs: z.array(inputDeclarationSchema).default([]),
+  version: z.number().int().nonnegative().default(0),
+  updated_at: z.string(),
+});
+
+export type LootTableDefinition = z.infer<typeof lootTableDefinitionSchema>;
+
+export type SimulationTimelineEventType = 'appeared' | 'rolled' | 'consumed' | 'granted';
+
+export interface SimulationTimelineEvent {
+  rollIndex: number;
+  run: number;
+  type: SimulationTimelineEventType;
+  quantity?: number;
+}
+
+export type SimulationResultEntrySource = 'weighted' | 'guaranteed';
+
+export interface SimulationResultEntry {
+  entryId: string;
+  type: LootType;
+  totalDrops: number;
+  minYield?: number;
+  maxYield?: number;
+  itemId?: string;
+  firstAppearedAt: number | null;
+  firstRunAppearance: number | null;
+  probability: number;
+  perRunAverage: number;
+  rollHits: number;
+  bundleHits: number;
+  timeline: SimulationTimelineEvent[];
+  source: SimulationResultEntrySource;
+}
+
+export interface SimulationResult {
+  runs: number;
+  durationMs: number;
+  totalRolls: number;
+  entries: SimulationResultEntry[];
+}
+
+export function getEntryKey(entry: LootEntry): string {
+  if (entry.type === 'dropped_item' || entry.type === 'given_item') return entry.itemId;
+  if (entry.type === 'dropped_coin' || entry.type === 'given_coin') return `${entry.type}:${entry.coinType}`;
+  if (entry.type === 'dropped_clan_energy' || entry.type === 'given_clan_energy') return `${entry.type}:${entry.energyType}`;
+  if (entry.type === 'fish') return entry.itemId;
+  if (entry.type === 'entity_spawn') return `entity_spawn:${entry.entityType}`;
+  return entry.type;
+}
+
+export function computeWeightTotals(entries: LootEntry[]): { totalWeight: number; probabilities: Record<string, number> } {
+  const weights = entries.map((entry) => getPreviewWeight(entry.weight));
+  const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+  const probabilities = Object.fromEntries(
+    entries.map((entry, i) => [entry.id, totalWeight > 0 ? weights[i] / totalWeight : 0]),
+  );
+  return { totalWeight, probabilities };
+}
+
+export function ensureUniqueEntries(entries: LootEntry[]): LootEntry[] {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    const key = getEntryKey(entry);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Factory for a blank loot table draft, used when creating new content. */
+export function makeDefaultLootTable(id: string, name: string): LootTableDefinition {
+  return {
+    id,
+    name,
+    replacementStrategy: 'UNSET',
+    rollStrategy: { type: 'CONSTANT', rolls: 1 },
+    weightDistribution: 'STATIC',
+    pityRules: [],
+    awardStrategy: { type: 'DEFAULT' },
+    entries: [],
+    guaranteed: [],
+    inputs: [],
+    version: 0,
+    updated_at: new Date(0).toISOString(),
+  };
+}

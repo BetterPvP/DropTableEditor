@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { NAV_ITEMS } from './nav-data';
+import { NAV_SECTIONS } from './nav-data';
 import { NavIcon } from './nav-icon';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -33,24 +33,31 @@ export function SideNav() {
           {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
         </Button>
       </div>
-      <nav className="flex-1 space-y-1 px-2 py-4">
-        {NAV_ITEMS.map((item) => {
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted/70',
-                isActive ? 'border border-primary/40 bg-primary/12 text-primary' : 'text-foreground/70',
-                collapsed && 'justify-center gap-0 px-0',
-              )}
-            >
-              <NavIcon name={item.icon} className={cn(collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
-              <span className={cn('truncate', collapsed && 'sr-only')}>{item.label}</span>
-            </Link>
-          );
-        })}
+      <nav className="flex-1 space-y-6 px-2 py-4">
+        {NAV_SECTIONS.map((section) => (
+          <div key={section.title} className="space-y-1">
+            <p className={cn('px-3 text-xs font-semibold uppercase tracking-wider text-foreground/40', collapsed && 'sr-only')}>
+              {section.title}
+            </p>
+            {section.items.map((item) => {
+              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    'group flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors hover:bg-muted/70',
+                    isActive ? 'border border-primary/40 bg-primary/12 text-primary' : 'text-foreground/70',
+                    collapsed && 'justify-center gap-0 px-0',
+                  )}
+                >
+                  <NavIcon name={item.icon} className={cn(collapsed ? 'h-5 w-5' : 'h-4 w-4')} />
+                  <span className={cn('truncate', collapsed && 'sr-only')}>{item.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
     </aside>
   );

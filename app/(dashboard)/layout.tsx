@@ -1,6 +1,9 @@
 import { AppHeader } from '@/components/navigation/app-header';
 import { SideNav } from '@/components/navigation/side-nav';
 
+// All dashboard content is DB-backed and behind auth — never prerender it.
+export const dynamic = 'force-dynamic';
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const environment = (process.env.NEXT_PUBLIC_APP_ENV ?? 'development') as
     | 'development'

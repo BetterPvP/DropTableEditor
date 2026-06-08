@@ -1,0 +1,56 @@
+# Local stack for the BetterPvP Admin Console.
+#
+#   docker compose up --build
+#   → http://localhost:3000   (sign up at /auth/sign-up with invite code DEV-1)
+#
+# Services:
+#   db       PostgreSQL — the shared source of truth (game DB stand-in for dev)
+#   migrate  one-shot: applies db/sql, seeds the manifest, inserts a dev invite
+#   app      the Next.js console (standalone build)
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: betterpvp
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d betterpvp"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    build:
+      context: .
+      target: migrate
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/betterpvp
+      DEV_INVITE_CODE: DEV-1
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: runner
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@db:5432/betterpvp
+      AUTH_SECRET: ${AUTH_SECRET:-dev-insecure-secret-change-me-please-0000}
+      AUTH_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_ENV: development
+    ports:
+      - "3000:3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:

@@ -1,13 +1,12 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useState } from 'react';
-import { CircleEllipsis, LogOut, Sparkles } from 'lucide-react';
+import { usePathname } from 'next/navigation';
+import { LogOut, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { createBrowserSupabaseClient } from '@/supabase/client';
+import { signOutAction } from '@/lib/auth/actions';
 
 interface AppHeaderProps {
   environment?: 'development' | 'staging' | 'production';
@@ -15,18 +14,6 @@ interface AppHeaderProps {
 
 export function AppHeader({ environment = 'development' }: AppHeaderProps) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [signingOut, setSigningOut] = useState(false);
-
-  const handleSignOut = async () => {
-    if (signingOut) return;
-    setSigningOut(true);
-    const supabase = createBrowserSupabaseClient();
-    await supabase.auth.signOut();
-    router.replace('/auth/sign-in');
-    router.refresh();
-    setSigningOut(false);
-  };
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b bg-background px-6">
@@ -39,20 +26,16 @@ export function AppHeader({ environment = 'development' }: AppHeaderProps) {
           {environment}
         </Badge>
         <Separator orientation="vertical" />
-        <div className="hidden items-center gap-2 text-sm text-foreground/60 md:flex" aria-live="polite">
-          <CircleEllipsis className="h-4 w-4" />
-          <span>{pathname === '/' ? 'Overview' : 'Workspace tools'}</span>
-        </div>
+        <span className="hidden text-sm text-foreground/60 md:inline" aria-live="polite">
+          {pathname === '/' ? 'Overview' : 'Workspace'}
+        </span>
       </div>
-      <div className="flex items-center gap-2">
-        <Button variant="ghost" size="sm" asChild>
-          <Link href="/settings/account">Account</Link>
-        </Button>
-        <Button variant="outline" size="sm" className="gap-2" onClick={handleSignOut} disabled={signingOut}>
+      <form action={signOutAction}>
+        <Button variant="outline" size="sm" className="gap-2" type="submit">
           <LogOut className="h-4 w-4" />
-          {signingOut ? 'Signing out…' : 'Sign out'}
+          Sign out
         </Button>
-      </div>
+      </form>
     </header>
   );
 }
