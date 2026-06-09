@@ -2,16 +2,16 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Save, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CardActions } from './card-actions';
 import { PURITIES, purityMeta, readWeights } from '@/lib/tuning/purity';
-import { saveTuningRowAction, deleteTuningRowAction } from '@/lib/tuning/actions';
+import { saveTuningRowAction, publishTuningRowAction, deleteTuningRowAction } from '@/lib/tuning/actions';
 
-interface Row { key: string; definition: unknown }
+interface Row { key: string; definition: unknown; unpublished: boolean }
 
 const SLOTS = ['0', '1', '2', '3', '4'];
 
@@ -34,31 +34,31 @@ export function RuneSlotEditor({ slug, rows }: { slug: string; rows: Row[] }) {
 
       {PURITIES.filter((p) => present.has(p.key)).map((p) => {
         const row = rows.find((r) => r.key === p.key)!;
-        return <RuneSlotCard key={p.key} slug={slug} purity={p.key} definition={row.definition} />;
+        return <RuneSlotCard key={p.key} slug={slug} purity={p.key} definition={row.definition} unpublished={row.unpublished} />;
       })}
     </div>
   );
 }
 
-function RuneSlotCard({ slug, purity, definition }: { slug: string; purity: string; definition: unknown }) {
+function RuneSlotCard({ slug, purity, definition, unpublished }: { slug: string; purity: string; definition: unknown; unpublished: boolean }) {
   const router = useRouter();
   const d = (definition ?? {}) as { socket_weights?: unknown; max_socket_weights?: unknown; notes?: string };
   const [sockets, setSockets] = useState(readWeights(d.socket_weights, SLOTS));
   const [maxSockets, setMaxSockets] = useState(readWeights(d.max_socket_weights, SLOTS));
   const [notes, setNotes] = useState(d.notes ?? '');
-  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const meta = purityMeta(purity);
 
-  const save = async () => {
-    setSaving(true);
-    setError(null);
-    const result = await saveTuningRowAction(slug, purity,
+  const run = async (action: (slug: string, key: string, text: string) => Promise<{ ok: true } | { ok: false; error: string }>) => {
+    setBusy(true); setError(null);
+    const result = await action(slug, purity,
       JSON.stringify({ purity, socket_weights: sockets, max_socket_weights: maxSockets, notes }));
-    setSaving(false);
-    if (!result.ok) setError(result.error);
-    else router.refresh();
+    setBusy(false);
+    if (!result.ok) setError(result.error); else router.refresh();
   };
+  const save = () => run(saveTuningRowAction);
+  const publish = () => run(publishTuningRowAction);
 
   const remove = async () => {
     if (!window.confirm(`Delete rune slots for ${purity}?`)) return;
@@ -73,12 +73,7 @@ function RuneSlotCard({ slug, purity, definition }: { slug: string; purity: stri
           <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: meta?.color }} />
           {meta?.label ?? purity}
         </span>
-        <div className="flex items-center gap-2">
-          <Button type="button" size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-700" onClick={save} disabled={saving}>
-            <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save'}
-          </Button>
-          <Button type="button" size="sm" variant="destructive" onClick={remove}><Trash2 className="h-4 w-4" /></Button>
-        </div>
+        <CardActions unpublished={unpublished} busy={busy} onSave={save} onPublish={publish} onDelete={remove} />
       </div>
       <div className="grid gap-6 md:grid-cols-2">
         <SlotGroup title="Sockets" color={meta?.color} weights={sockets} onChange={setSockets} />

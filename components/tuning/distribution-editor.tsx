@@ -2,14 +2,15 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Save, Trash2 } from 'lucide-react';
+import { Plus, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { CardActions } from './card-actions';
 import { PURITIES, readWeights } from '@/lib/tuning/purity';
-import { saveTuningRowAction, deleteTuningRowAction } from '@/lib/tuning/actions';
+import { saveTuningRowAction, publishTuningRowAction, deleteTuningRowAction } from '@/lib/tuning/actions';
 
-interface Row { key: string; definition: unknown }
+interface Row { key: string; definition: unknown; unpublished: boolean }
 
 export function PurityDistributionEditor({ slug, rows }: { slug: string; rows: Row[] }) {
   const [adding, setAdding] = useState(false);
@@ -42,31 +43,37 @@ export function PurityDistributionEditor({ slug, rows }: { slug: string; rows: R
       )}
 
       {rows.map((row) => (
-        <DistributionCard key={row.key} slug={slug} name={row.key} definition={row.definition} />
+        <DistributionCard key={row.key} slug={slug} name={row.key} definition={row.definition} unpublished={row.unpublished} />
       ))}
     </div>
   );
 }
 
-function DistributionCard({ slug, name, definition }: { slug: string; name: string; definition: unknown }) {
+function DistributionCard({ slug, name, definition, unpublished }: { slug: string; name: string; definition: unknown; unpublished: boolean }) {
   const router = useRouter();
   const keys = PURITIES.map((p) => p.key);
   const [weights, setWeights] = useState<Record<string, number>>(
     readWeights((definition as { weights?: unknown })?.weights, keys),
   );
-  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const total = keys.reduce((sum, k) => sum + (weights[k] || 0), 0);
   const pct = (k: string) => (total > 0 ? ((weights[k] || 0) / total) * 100 : 0);
+  const payload = () => JSON.stringify({ distribution_name: name, weights });
 
   const save = async () => {
-    setSaving(true);
-    setError(null);
-    const result = await saveTuningRowAction(slug, name, JSON.stringify({ distribution_name: name, weights }));
-    setSaving(false);
-    if (!result.ok) setError(result.error);
-    else router.refresh();
+    setBusy(true); setError(null);
+    const result = await saveTuningRowAction(slug, name, payload());
+    setBusy(false);
+    if (!result.ok) setError(result.error); else router.refresh();
+  };
+
+  const publish = async () => {
+    setBusy(true); setError(null);
+    const result = await publishTuningRowAction(slug, name, payload());
+    setBusy(false);
+    if (!result.ok) setError(result.error); else router.refresh();
   };
 
   const remove = async () => {
@@ -79,12 +86,7 @@ function DistributionCard({ slug, name, definition }: { slug: string; name: stri
     <div className="glass-panel rounded-lg border p-5">
       <div className="mb-4 flex items-center justify-between">
         <span className="font-mono text-lg">{name}</span>
-        <div className="flex items-center gap-2">
-          <Button type="button" size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-700" onClick={save} disabled={saving}>
-            <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save'}
-          </Button>
-          <Button type="button" size="sm" variant="destructive" onClick={remove}><Trash2 className="h-4 w-4" /></Button>
-        </div>
+        <CardActions unpublished={unpublished} busy={busy} onSave={save} onPublish={publish} onDelete={remove} />
       </div>
 
       {/* Live stacked rarity bar */}

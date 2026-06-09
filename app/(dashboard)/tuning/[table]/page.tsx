@@ -9,7 +9,11 @@ export default async function TuningPage({ params }: { params: { table: string }
   const def = tuningBySlug(params.table);
   if (!def) notFound();
 
-  const rows = (await listTuningRows(def.table, def.keyColumn)).map((r) => ({ key: r.key, definition: r.definition }));
+  const rows = (await listTuningRows(def.table, def.keyColumn)).map((r) => ({
+    key: r.key,
+    definition: r.draft,
+    unpublished: r.unpublished,
+  }));
 
   switch (def.slug) {
     case 'purity-distributions':

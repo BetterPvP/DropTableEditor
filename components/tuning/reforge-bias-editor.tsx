@@ -2,17 +2,17 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Save, Trash2 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { CardActions } from './card-actions';
 import { PURITIES, purityMeta } from '@/lib/tuning/purity';
-import { saveTuningRowAction, deleteTuningRowAction } from '@/lib/tuning/actions';
+import { saveTuningRowAction, publishTuningRowAction, deleteTuningRowAction } from '@/lib/tuning/actions';
 
-interface Row { key: string; definition: unknown }
+interface Row { key: string; definition: unknown; unpublished: boolean }
 
 function betaCurve(alpha: number, beta: number) {
   if (alpha <= 0 || beta <= 0) return [];
@@ -45,19 +45,19 @@ export function ReforgeBiasEditor({ slug, rows }: { slug: string; rows: Row[] })
 
       {PURITIES.filter((p) => present.has(p.key)).map((p) => {
         const row = rows.find((r) => r.key === p.key)!;
-        return <BiasCard key={p.key} slug={slug} purity={p.key} definition={row.definition} />;
+        return <BiasCard key={p.key} slug={slug} purity={p.key} definition={row.definition} unpublished={row.unpublished} />;
       })}
     </div>
   );
 }
 
-function BiasCard({ slug, purity, definition }: { slug: string; purity: string; definition: unknown }) {
+function BiasCard({ slug, purity, definition, unpublished }: { slug: string; purity: string; definition: unknown; unpublished: boolean }) {
   const router = useRouter();
   const d = (definition ?? {}) as { alpha?: number; beta?: number; notes?: string };
   const [alpha, setAlpha] = useState<number>(typeof d.alpha === 'number' ? d.alpha : 1);
   const [beta, setBeta] = useState<number>(typeof d.beta === 'number' ? d.beta : 1);
   const [notes, setNotes] = useState<string>(d.notes ?? '');
-  const [saving, setSaving] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const meta = purityMeta(purity);
@@ -65,15 +65,15 @@ function BiasCard({ slug, purity, definition }: { slug: string; purity: string; 
   const skew = alpha > beta ? 'favours high stats' : alpha < beta ? 'favours low stats' : 'even spread';
   const curve = useMemo(() => betaCurve(alpha, beta), [alpha, beta]);
 
-  const save = async () => {
-    setSaving(true);
-    setError(null);
-    if (alpha <= 0 || beta <= 0) { setError('Alpha and Beta must both be greater than 0.'); setSaving(false); return; }
-    const result = await saveTuningRowAction(slug, purity, JSON.stringify({ purity, alpha, beta, notes }));
-    setSaving(false);
-    if (!result.ok) setError(result.error);
-    else router.refresh();
+  const run = async (action: (slug: string, key: string, text: string) => Promise<{ ok: true } | { ok: false; error: string }>) => {
+    if (alpha <= 0 || beta <= 0) { setError('Alpha and Beta must both be greater than 0.'); return; }
+    setBusy(true); setError(null);
+    const result = await action(slug, purity, JSON.stringify({ purity, alpha, beta, notes }));
+    setBusy(false);
+    if (!result.ok) setError(result.error); else router.refresh();
   };
+  const save = () => run(saveTuningRowAction);
+  const publish = () => run(publishTuningRowAction);
 
   const remove = async () => {
     if (!window.confirm(`Delete bias for ${purity}?`)) return;
@@ -88,12 +88,7 @@ function BiasCard({ slug, purity, definition }: { slug: string; purity: string; 
           <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: meta?.color }} />
           {meta?.label ?? purity}
         </span>
-        <div className="flex items-center gap-2">
-          <Button type="button" size="sm" className="gap-2 bg-emerald-600 hover:bg-emerald-700" onClick={save} disabled={saving}>
-            <Save className="h-4 w-4" /> {saving ? 'Saving…' : 'Save'}
-          </Button>
-          <Button type="button" size="sm" variant="destructive" onClick={remove}><Trash2 className="h-4 w-4" /></Button>
-        </div>
+        <CardActions unpublished={unpublished} busy={busy} onSave={save} onPublish={publish} onDelete={remove} />
       </div>
 
       <div className="grid gap-5 md:grid-cols-[260px_1fr]">

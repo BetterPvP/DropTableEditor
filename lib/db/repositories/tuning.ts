@@ -1,32 +1,58 @@
 import { pool } from '../client';
 
 /**
- * Generic CRUD for the `(key, definition jsonb)` tuning tables. The table and
- * key-column names are NOT user input — they come from the fixed TUNING_TABLES
- * registry — so interpolating them into SQL is safe. Values are always passed as
- * parameters.
+ * Generic CRUD for the `(key, draft jsonb, published jsonb)` tuning tables.
+ * Table + key-column names come from the fixed TUNING_TABLES registry (never
+ * user input), so interpolating them is safe; values are always parameters.
+ *
+ * draft -> published: the console edits `draft`; Publish copies it to
+ * `published` (which the game reads) and fires `tuning_changed`.
  */
 export interface TuningRow {
   key: string;
-  definition: unknown;
-  updatedAt: Date | null;
+  draft: unknown;
+  published: unknown;
+  unpublished: boolean;
 }
 
 export async function listTuningRows(table: string, keyColumn: string): Promise<TuningRow[]> {
   const { rows } = await pool.query(
-    `SELECT ${keyColumn} AS key, definition, updated_at FROM ${table} ORDER BY ${keyColumn}`,
+    `SELECT ${keyColumn} AS key, draft, published FROM ${table} ORDER BY ${keyColumn}`,
   );
-  return rows.map((r) => ({ key: r.key, definition: r.definition, updatedAt: r.updated_at }));
+  return rows.map((r) => ({
+    key: r.key,
+    draft: r.draft,
+    published: r.published,
+    unpublished: JSON.stringify(r.draft) !== JSON.stringify(r.published),
+  }));
 }
 
-export async function upsertTuningRow(table: string, keyColumn: string, key: string, definition: unknown): Promise<void> {
+/** Save the editor draft only — does NOT go live. */
+export async function saveDraftTuningRow(table: string, keyColumn: string, key: string, draft: unknown): Promise<void> {
   await pool.query(
-    `INSERT INTO ${table} (${keyColumn}, definition) VALUES ($1, $2::jsonb)
-     ON CONFLICT (${keyColumn}) DO UPDATE SET definition = EXCLUDED.definition, updated_at = now()`,
-    [key, JSON.stringify(definition)],
+    `INSERT INTO ${table} (${keyColumn}, draft) VALUES ($1, $2::jsonb)
+     ON CONFLICT (${keyColumn}) DO UPDATE SET draft = EXCLUDED.draft, updated_at = now()`,
+    [key, JSON.stringify(draft)],
   );
+}
+
+/** Save the draft AND copy it to published (live), then signal the game. */
+export async function publishTuningRow(table: string, keyColumn: string, key: string, draft: unknown): Promise<void> {
+  await pool.query(
+    `INSERT INTO ${table} (${keyColumn}, draft, published, published_at) VALUES ($1, $2::jsonb, $2::jsonb, now())
+     ON CONFLICT (${keyColumn}) DO UPDATE
+       SET draft = EXCLUDED.draft, published = EXCLUDED.draft, published_at = now(), updated_at = now()`,
+    [key, JSON.stringify(draft)],
+  );
+  await notifyTuningChanged(table);
 }
 
 export async function deleteTuningRow(table: string, keyColumn: string, key: string): Promise<void> {
   await pool.query(`DELETE FROM ${table} WHERE ${keyColumn} = $1`, [key]);
+  await notifyTuningChanged(table);
+}
+
+/** Signal the game to hot-reload its purity/rune-slot registries. */
+async function notifyTuningChanged(table: string): Promise<void> {
+  await pool.query(`SELECT pg_notify('tuning_changed', $1)`, [table]);
 }

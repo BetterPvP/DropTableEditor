@@ -3,33 +3,45 @@
 import { revalidatePath } from 'next/cache';
 import { auth } from '@/auth';
 import { tuningBySlug } from './registry';
-import { upsertTuningRow, deleteTuningRow } from '@/lib/db/repositories/tuning';
+import { saveDraftTuningRow, publishTuningRow, deleteTuningRow } from '@/lib/db/repositories/tuning';
 
 async function requireUser(): Promise<void> {
   const session = await auth();
   if (!session?.user?.id) throw new Error('Unauthorized');
 }
 
-export type SaveTuningResult = { ok: true } | { ok: false; error: string };
+export type TuningResult = { ok: true } | { ok: false; error: string };
 
-export async function saveTuningRowAction(
-  slug: string,
-  key: string,
-  definitionText: string,
-): Promise<SaveTuningResult> {
-  await requireUser();
+function parse(slug: string, definitionText: string): { ok: true; def: NonNullable<ReturnType<typeof tuningBySlug>>; value: unknown } | { ok: false; error: string } {
   const def = tuningBySlug(slug);
   if (!def) return { ok: false, error: 'Unknown tuning table.' };
-  if (!key.trim()) return { ok: false, error: 'Key is required.' };
-
-  let parsed: unknown;
   try {
-    parsed = JSON.parse(definitionText);
+    return { ok: true, def, value: JSON.parse(definitionText) };
   } catch {
     return { ok: false, error: 'Definition is not valid JSON.' };
   }
+}
 
-  await upsertTuningRow(def.table, def.keyColumn, key.trim(), parsed);
+/** Save the editor draft. Not live until published. */
+export async function saveTuningRowAction(slug: string, key: string, definitionText: string): Promise<TuningResult> {
+  await requireUser();
+  if (!key.trim()) return { ok: false, error: 'Key is required.' };
+  const parsed = parse(slug, definitionText);
+  if (!parsed.ok) return parsed;
+
+  await saveDraftTuningRow(parsed.def.table, parsed.def.keyColumn, key.trim(), parsed.value);
+  revalidatePath(`/tuning/${slug}`);
+  return { ok: true };
+}
+
+/** Save the draft and push it live (the game hot-reloads). */
+export async function publishTuningRowAction(slug: string, key: string, definitionText: string): Promise<TuningResult> {
+  await requireUser();
+  if (!key.trim()) return { ok: false, error: 'Key is required.' };
+  const parsed = parse(slug, definitionText);
+  if (!parsed.ok) return parsed;
+
+  await publishTuningRow(parsed.def.table, parsed.def.keyColumn, key.trim(), parsed.value);
   revalidatePath(`/tuning/${slug}`);
   return { ok: true };
 }
