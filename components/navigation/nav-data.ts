@@ -1,4 +1,5 @@
 import { CONTENT_TYPES } from '@/lib/content/registry';
+import { TUNING_TABLES } from '@/lib/tuning/registry';
 
 export interface NavItem {
   href: string;
@@ -15,6 +16,10 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Content',
     items: CONTENT_TYPES.map((c) => ({ href: `/${c.slug}`, label: c.plural, icon: c.icon })),
+  },
+  {
+    title: 'Game Tuning',
+    items: TUNING_TABLES.map((t) => ({ href: `/tuning/${t.slug}`, label: t.label, icon: 'settings' })),
   },
   {
     title: 'Reference',
