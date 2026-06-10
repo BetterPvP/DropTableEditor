@@ -19,15 +19,32 @@ const HUMAN = 'human';
 export function QuestNpcsEditor({ npcs, factories }: { npcs: QuestNpcRow[]; factories: FactoryOption[] }) {
   const router = useRouter();
   const [newId, setNewId] = useState('');
+  const [addError, setAddError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const create = async () => {
-    if (!newId.trim()) return;
-    await saveQuestNpcAction({
-      id: newId.trim(), displayName: newId.trim(), kind: null, contentId: null,
-      source: HUMAN, factory: null, type: null, skinValue: null, skinSignature: null,
-    });
-    setNewId('');
-    router.refresh();
+    if (!newId.trim()) {
+      setAddError('Enter an NPC id first.');
+      return;
+    }
+    setAdding(true);
+    setAddError(null);
+    try {
+      const result = await saveQuestNpcAction({
+        id: newId.trim(), displayName: newId.trim(), kind: null, contentId: null,
+        source: HUMAN, factory: null, type: null, skinValue: null, skinSignature: null,
+      });
+      if (!result.ok) {
+        setAddError(result.error);
+        return;
+      }
+      setNewId('');
+      router.refresh();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : 'Failed to save (is the quest_npcs table created?).');
+    } finally {
+      setAdding(false);
+    }
   };
 
   return (
@@ -41,12 +58,17 @@ export function QuestNpcsEditor({ npcs, factories }: { npcs: QuestNpcRow[]; fact
         </p>
       </div>
 
-      <div className="glass-panel flex items-end gap-2 rounded-lg border p-4">
-        <div className="space-y-1.5">
-          <Label className="text-xs uppercase tracking-wide text-foreground/50">New NPC id (= Mapper data-point name)</Label>
-          <Input value={newId} onChange={(e) => setNewId(e.target.value)} placeholder="foreman_garrick" className="w-72" />
+      <div className="glass-panel rounded-lg border p-4">
+        <div className="flex items-end gap-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs uppercase tracking-wide text-foreground/50">New NPC id (= Mapper data-point name)</Label>
+            <Input value={newId} onChange={(e) => setNewId(e.target.value)} placeholder="foreman_garrick" className="w-72" />
+          </div>
+          <Button type="button" className="gap-2" onClick={create} disabled={adding}>
+            <Plus className="h-4 w-4" /> {adding ? 'Adding…' : 'Add NPC'}
+          </Button>
         </div>
-        <Button type="button" className="gap-2" onClick={create}><Plus className="h-4 w-4" /> Add NPC</Button>
+        {addError && <p className="mt-2 text-sm text-destructive">{addError}</p>}
       </div>
 
       {npcs.map((npc) => (

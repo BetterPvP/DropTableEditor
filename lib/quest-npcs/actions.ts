@@ -15,7 +15,7 @@ export type SkinResult = { ok: true; value: string; signature: string | null } |
 export async function saveQuestNpcAction(npc: QuestNpcRow): Promise<ActionResult> {
   await requireUser();
   if (!npc.id.trim()) return { ok: false, error: 'NPC id is required (this is the Mapper data-point name).' };
-  if (npc.source === 'human' && !npc.skinValue) return { ok: false, error: 'A Human NPC needs a skin.' };
+  // A Human with no skin just uses the default skin; only a factory NPC must pick a type.
   if (npc.source === 'factory' && (!npc.factory || !npc.type)) return { ok: false, error: 'Pick a factory + type.' };
 
   await upsertQuestNpc({ ...npc, id: npc.id.trim() });
