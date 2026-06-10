@@ -15,7 +15,10 @@ export interface NavSection {
 export const NAV_SECTIONS: NavSection[] = [
   {
     title: 'Content',
-    items: CONTENT_TYPES.map((c) => ({ href: `/${c.slug}`, label: c.plural, icon: c.icon })),
+    items: [
+      ...CONTENT_TYPES.map((c) => ({ href: `/${c.slug}`, label: c.plural, icon: c.icon })),
+      { href: '/quest-npcs', label: 'Quest NPCs', icon: 'flag' },
+    ],
   },
   {
     title: 'Game Tuning',
