@@ -37,7 +37,6 @@ export const PRIMITIVES: PrimitiveDescriptor[] = [
   { id: 'action.send_message', category: 'action', label: 'Send message', params: { message: { type: 'text' } } },
   { id: 'action.start_conversation', category: 'action', label: 'Start conversation', params: { conversation: { type: 'content_ref', contentType: 'conversation', required: true } } },
   { id: 'action.start_cinematic', category: 'action', label: 'Start cinematic', params: { cinematic: { type: 'content_ref', contentType: 'cinematic', required: true } } },
-  { id: 'action.spawn_npc', category: 'action', label: 'Spawn NPC', params: { npc: { type: 'npc_ref', required: true }, zone: { type: 'zone_ref' } } },
   { id: 'action.fire_event', category: 'action', label: 'Fire event', params: { key: { type: 'string', required: true } } },
   { id: 'action.teleport', category: 'action', label: 'Teleport', params: { zone: { type: 'zone_ref', required: true } } },
 

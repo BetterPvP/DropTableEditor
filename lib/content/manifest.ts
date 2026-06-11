@@ -1,4 +1,5 @@
-import { listItems, listZones, listNpcs, listProfessions } from '@/lib/db/repositories/manifest';
+import { listItems, listZones, listProfessions } from '@/lib/db/repositories/manifest';
+import { listQuestNpcs } from '@/lib/db/repositories/quest-npcs';
 import { listContent } from '@/lib/db/repositories/content';
 import type { ContentType } from '@/lib/db/types';
 
@@ -21,7 +22,7 @@ export async function loadEditorManifest(): Promise<EditorManifest> {
   const [items, zones, npcs, professions, loot, saga, quest, conversation, cinematic] = await Promise.all([
     listItems(undefined, 1000),
     listZones(),
-    listNpcs(),
+    listQuestNpcs(),
     listProfessions(),
     listContent('loot_table'),
     listContent('saga'),
@@ -36,7 +37,7 @@ export async function loadEditorManifest(): Promise<EditorManifest> {
   return {
     items: items.map((i) => ({ id: i.key, label: i.display_name })),
     zones: zones.map((z) => ({ id: z.key, label: z.display_name })),
-    npcs: npcs.map((n) => ({ id: n.key, label: n.display_name })),
+    npcs: npcs.map((n) => ({ id: n.id, label: n.displayName })),
     professions: professions.map((p) => ({ id: p.key, label: p.display_name })),
     content: {
       loot_table: toContent(loot),
