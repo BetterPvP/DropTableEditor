@@ -14,7 +14,12 @@ export interface GameItem {
   tags: string[];
 }
 
-export async function listItems(search?: string, limit = 200): Promise<GameItem[]> {
+/**
+ * @param limit Cap the result count. Omit for no cap — full-listing callers
+ *   (the items reference browser) want every row; bounded callers (editor
+ *   autocomplete) should pass an explicit ceiling.
+ */
+export async function listItems(search?: string, limit?: number): Promise<GameItem[]> {
   let query = db.selectFrom('game_items').select(['key', 'display_name', 'source', 'material', 'tags']);
   if (search && search.trim()) {
     const term = `%${search.trim().toLowerCase()}%`;
@@ -25,7 +30,8 @@ export async function listItems(search?: string, limit = 200): Promise<GameItem[
       ]),
     );
   }
-  const rows = await query.orderBy('key').limit(limit).execute();
+  if (limit !== undefined) query = query.limit(limit);
+  const rows = await query.orderBy('key').execute();
   return rows as GameItem[];
 }
 
