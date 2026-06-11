@@ -46,10 +46,24 @@ const conversation = {
   name: 'Garrick Greeting',
   startNodeId: 'g1',
   nodes: [
-    { id: 'g1', kind: 'dialogue', position: { x: 120, y: 120 }, data: { speaker: 'Garrick', body: 'Well met, traveller. The mines need clearing.', font: 'default', typewriterCps: 28, voiceLineKey: '', delayTicks: 0 } },
-    { id: 'g2', kind: 'dialogue', position: { x: 400, y: 120 }, data: { speaker: 'Garrick', body: 'Good. Three should do it. Off you go.', font: 'default', typewriterCps: 28, voiceLineKey: '', delayTicks: 0 } },
+    {
+      id: 'g1', kind: 'dialogue', position: { x: 120, y: 120 },
+      data: {
+        speaker: 'Garrick', body: 'Well met, traveller. The mines need clearing.', font: 'default', typewriterCps: 28, voiceLineKey: '', delayTicks: 0,
+        responses: [
+          { id: 'gr1', label: "I'll help", flag: '', conditions: [], actions: [], outcome: { kind: 'goto', target: 'g2' } },
+          { id: 'gr2', label: 'Not now.', flag: '', conditions: [], actions: [], outcome: { kind: 'end' } },
+        ],
+      },
+    },
+    {
+      id: 'g2', kind: 'dialogue', position: { x: 400, y: 120 },
+      data: {
+        speaker: 'Garrick', body: 'Good. Three should do it. Off you go.', font: 'default', typewriterCps: 28, voiceLineKey: '', delayTicks: 0,
+        responses: [{ id: 'gr3', label: 'Understood.', flag: '', conditions: [], actions: [], outcome: { kind: 'end' } }],
+      },
+    },
   ],
-  edges: [{ id: 'ge1', source: 'g1', target: 'g2', data: { label: "I'll help", conditions: [], actions: [] } }],
 };
 
 const client = new pg.Client({ connectionString });

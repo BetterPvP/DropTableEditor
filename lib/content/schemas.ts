@@ -1,13 +1,13 @@
 import { z } from 'zod';
 import type { ContentType } from '@/lib/db/types';
 import { lootTableDefinitionSchema, makeDefaultLootTable, type LootEntry } from './loot_table/schema';
-import { conversationSchema, makeDefaultConversation } from './conversation/schema';
+import { conversationSchema, makeDefaultConversation, type ResponseDefinition, type ResponseOutcome } from './conversation/schema';
 import { sagaSchema, makeDefaultSaga } from './saga/schema';
 import { questSchema, makeDefaultQuest } from './quest/schema';
 import { cinematicSchema, makeDefaultCinematic } from './cinematic/schema';
 import { primitiveById } from '@/lib/primitives/registry';
 import type { PrimitiveInstance } from '@/lib/primitives/types';
-import type { GraphNode, GraphEdge } from '@/lib/graph/types';
+import type { GraphNode } from '@/lib/graph/types';
 
 /**
  * Per-content-type schema + default factory + reference extraction. Validates
@@ -56,6 +56,24 @@ function dedupeRefs(refs: Array<{ toId: string; kind: string }>): Array<{ toId: 
   });
 }
 
+/**
+ * Map a response outcome to the content links it implies, so publishing records
+ * the dependency in the content_links cache (and reference-integrity checks see
+ * it). `goto`/`end` stay inside the conversation and contribute no link; empty
+ * ids (a half-configured outcome) are skipped so we don't record dangling links.
+ */
+function outcomeContentRefs(outcome: ResponseOutcome | undefined): Array<{ toId: string; kind: string }> {
+  if (!outcome) return [];
+  switch (outcome.kind) {
+    case 'start_conversation':
+      return outcome.conversationId ? [{ toId: outcome.conversationId, kind: 'conversation' }] : [];
+    case 'start_cinematic':
+      return outcome.cinematicId ? [{ toId: outcome.cinematicId, kind: 'cinematic' }] : [];
+    default:
+      return [];
+  }
+}
+
 export const CONTENT_SCHEMAS: Record<ContentType, ContentSchemaDef> = {
   loot_table: {
     schema: lootTableDefinitionSchema,
@@ -99,9 +117,13 @@ export const CONTENT_SCHEMAS: Record<ContentType, ContentSchemaDef> = {
     schema: conversationSchema,
     makeDefault: (id, name) => makeDefaultConversation(id, name),
     referencedContentIds: (draft) => {
-      const d = draft as { edges?: GraphEdge[] };
-      const actions = (d.edges ?? []).flatMap((e) => (e.data?.actions as PrimitiveInstance[]) ?? []);
-      return dedupeRefs(contentRefsFromPrimitives(actions));
+      const d = draft as { nodes?: GraphNode[] };
+      const responses = (d.nodes ?? []).flatMap(
+        (n) => (n.data?.responses as ResponseDefinition[] | undefined) ?? [],
+      );
+      const actionRefs = contentRefsFromPrimitives(responses.flatMap((r) => r.actions ?? []));
+      const outcomeRefs = responses.flatMap((r) => outcomeContentRefs(r.outcome));
+      return dedupeRefs([...actionRefs, ...outcomeRefs]);
     },
   },
   cinematic: {

@@ -35,15 +35,43 @@ describe('content schema registry', () => {
     ]);
   });
 
-  it('extracts conversation action content refs (e.g. start_conversation)', () => {
+  it('extracts conversation response action content refs (e.g. start_conversation action)', () => {
     const refs = CONTENT_SCHEMAS.conversation.referencedContentIds!({
-      edges: [
+      nodes: [
         {
-          id: 'e1', source: 'a', target: 'b',
-          data: { actions: [{ id: 'x', type: 'action.start_conversation', params: { conversation: 'conv-2' } }] },
+          id: 'a', kind: 'dialogue', position: { x: 0, y: 0 },
+          data: {
+            responses: [
+              {
+                id: 'r1', label: 'Go', conditions: [], actions: [{ id: 'x', type: 'action.start_conversation', params: { conversation: 'conv-2' } }],
+                outcome: { kind: 'end' },
+              },
+            ],
+          },
         },
       ],
     });
     expect(refs).toEqual([{ toId: 'conv-2', kind: 'conversation' }]);
+  });
+
+  it('extracts content links from response outcomes (start_conversation / start_cinematic)', () => {
+    const refs = CONTENT_SCHEMAS.conversation.referencedContentIds!({
+      nodes: [
+        {
+          id: 'a', kind: 'dialogue', position: { x: 0, y: 0 },
+          data: {
+            responses: [
+              { id: 'r1', label: 'Talk', conditions: [], actions: [], outcome: { kind: 'start_conversation', conversationId: 'conv-9' } },
+              { id: 'r2', label: 'Watch', conditions: [], actions: [], outcome: { kind: 'start_cinematic', cinematicId: 'cine-3' } },
+              { id: 'r3', label: 'Leave', conditions: [], actions: [], outcome: { kind: 'end' } },
+            ],
+          },
+        },
+      ],
+    });
+    expect(refs).toEqual([
+      { toId: 'conv-9', kind: 'conversation' },
+      { toId: 'cine-3', kind: 'cinematic' },
+    ]);
   });
 });
