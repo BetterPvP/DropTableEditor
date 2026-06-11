@@ -31,7 +31,7 @@ export function QuestNpcsEditor({ npcs, factories }: { npcs: QuestNpcRow[]; fact
     setAddError(null);
     try {
       const result = await saveQuestNpcAction({
-        id: newId.trim(), displayName: newId.trim(), kind: null, contentId: null,
+        id: newId.trim(), displayName: newId.trim(),
         source: HUMAN, factory: null, type: null, skinValue: null, skinSignature: null,
       });
       if (!result.ok) {
@@ -81,8 +81,6 @@ export function QuestNpcsEditor({ npcs, factories }: { npcs: QuestNpcRow[]; fact
 function NpcCard({ npc, factories }: { npc: QuestNpcRow; factories: FactoryOption[] }) {
   const router = useRouter();
   const [displayName, setDisplayName] = useState(npc.displayName);
-  const [kind, setKind] = useState(npc.kind ?? 'none');
-  const [contentId, setContentId] = useState(npc.contentId ?? '');
   const [sourceSel, setSourceSel] = useState(npc.source === 'factory' ? `${npc.factory}:${npc.type}` : HUMAN);
   const [skinValue, setSkinValue] = useState(npc.skinValue ?? '');
   const [skinSignature, setSkinSignature] = useState(npc.skinSignature ?? '');
@@ -96,7 +94,7 @@ function NpcCard({ npc, factories }: { npc: QuestNpcRow; factories: FactoryOptio
     setBusy(true); setError(null);
     const [factory, type] = isHuman ? [null, null] : sourceSel.split(':');
     const result = await saveQuestNpcAction({
-      id: npc.id, displayName, kind: kind === 'none' ? null : kind, contentId: contentId || null,
+      id: npc.id, displayName,
       source: isHuman ? HUMAN : 'factory', factory, type,
       skinValue: isHuman ? (skinValue || null) : null,
       skinSignature: isHuman ? (skinSignature || null) : null,
@@ -163,21 +161,6 @@ function NpcCard({ npc, factories }: { npc: QuestNpcRow; factories: FactoryOptio
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs uppercase tracking-wide text-foreground/50">On interact</Label>
-          <Select value={kind} onValueChange={setKind}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">Nothing</SelectItem>
-              <SelectItem value="conversation">Start conversation</SelectItem>
-              <SelectItem value="quest">Start quest</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs uppercase tracking-wide text-foreground/50">Content id</Label>
-          <Input value={contentId} onChange={(e) => setContentId(e.target.value)} placeholder={kind === 'quest' ? 'quest id' : 'conversation id'} disabled={kind === 'none'} />
         </div>
       </div>
 

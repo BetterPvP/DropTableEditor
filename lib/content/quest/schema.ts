@@ -10,6 +10,8 @@ export const questSchema = z.object({
   description: z.string().optional(),
   questType: z.enum(questTypes).default('side'),
   scope: z.enum(questScopes).default('solo'),
+  // When false (default), a completed quest cannot be started again.
+  repeatable: z.boolean().default(false),
   requirements: z.array(primitiveInstanceSchema).default([]),
   rewards: z.array(primitiveInstanceSchema).default([]),
   // The stage graph: nodes = stages, edges = transitions (with guard conditions).
@@ -21,7 +23,7 @@ export type QuestDefinition = z.infer<typeof questSchema>;
 
 export function makeDefaultQuest(id: string, name: string) {
   return {
-    id, name, questType: 'side', scope: 'solo',
+    id, name, questType: 'side', scope: 'solo', repeatable: false,
     requirements: [], rewards: [], nodes: [], edges: [],
   };
 }

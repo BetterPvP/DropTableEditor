@@ -6,8 +6,6 @@
 CREATE TABLE IF NOT EXISTS quest_npcs (
   id             text PRIMARY KEY,
   display_name   text NOT NULL DEFAULT 'NPC',
-  kind           text,            -- conversation | quest
-  content_id     text,
   source         text NOT NULL DEFAULT 'human',  -- factory | human
   factory        text,
   type           text,

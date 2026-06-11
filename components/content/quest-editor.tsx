@@ -87,6 +87,16 @@ const questConfig: GraphConfig = {
             </Select>
           </div>
         </div>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            className="h-4 w-4 accent-primary"
+            checked={(draft.repeatable as boolean) ?? false}
+            onChange={(e) => update({ repeatable: e.target.checked } as Partial<GraphDraft>)}
+          />
+          <span>Repeatable</span>
+          <span className="text-xs text-foreground/40">— can be completed more than once</span>
+        </label>
         <PrimitiveListEditor
           title="Requirements (to start)"
           category="requirement"
