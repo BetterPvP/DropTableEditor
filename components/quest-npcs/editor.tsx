@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type ChangeEvent } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Save, Trash2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -90,23 +90,37 @@ function NpcCard({ npc, factories }: { npc: QuestNpcRow; factories: FactoryOptio
 
   const isHuman = sourceSel === HUMAN;
 
+  // Mirror the row as it actually is in the DB: when a refresh brings new values,
+  // drop the local (possibly failed-save) state so the card never lies.
+  useEffect(() => {
+    setDisplayName(npc.displayName);
+    setSourceSel(npc.source === 'factory' ? `${npc.factory}:${npc.type}` : HUMAN);
+    setSkinValue(npc.skinValue ?? '');
+    setSkinSignature(npc.skinSignature ?? '');
+  }, [npc.displayName, npc.source, npc.factory, npc.type, npc.skinValue, npc.skinSignature]);
+
   const save = async () => {
     setBusy(true); setError(null);
     const [factory, type] = isHuman ? [null, null] : sourceSel.split(':');
-    const result = await saveQuestNpcAction({
-      id: npc.id, displayName,
-      source: isHuman ? HUMAN : 'factory', factory, type,
-      skinValue: isHuman ? (skinValue || null) : null,
-      skinSignature: isHuman ? (skinSignature || null) : null,
-    });
-    setBusy(false);
-    if (!result.ok) setError(result.error); else router.refresh();
+    try {
+      const result = await saveQuestNpcAction({
+        id: npc.id, displayName,
+        source: isHuman ? HUMAN : 'factory', factory, type,
+        skinValue: isHuman ? (skinValue || null) : null,
+        skinSignature: isHuman ? (skinSignature || null) : null,
+      });
+      if (!result.ok) setError(result.error); else router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save the NPC.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   const remove = async () => {
     if (!window.confirm(`Delete "${npc.id}"?`)) return;
-    await deleteQuestNpcAction(npc.id);
-    router.refresh();
+    const result = await deleteQuestNpcAction(npc.id);
+    if (!result.ok) setError(result.error); else router.refresh();
   };
 
   const fetchSkin = async () => {

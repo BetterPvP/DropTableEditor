@@ -13,20 +13,29 @@ export type ActionResult = { ok: true } | { ok: false; error: string };
 export type SkinResult = { ok: true; value: string; signature: string | null } | { ok: false; error: string };
 
 export async function saveQuestNpcAction(npc: QuestNpcRow): Promise<ActionResult> {
-  await requireUser();
-  if (!npc.id.trim()) return { ok: false, error: 'NPC id is required (this is the Mapper data-point name).' };
-  // A Human with no skin just uses the default skin; only a factory NPC must pick a type.
-  if (npc.source === 'factory' && (!npc.factory || !npc.type)) return { ok: false, error: 'Pick a factory + type.' };
+  try {
+    await requireUser();
+    if (!npc.id.trim()) return { ok: false, error: 'NPC id is required (this is the Mapper data-point name).' };
+    // A Human with no skin just uses the default skin; only a factory NPC must pick a type.
+    if (npc.source === 'factory' && (!npc.factory || !npc.type)) return { ok: false, error: 'Pick a factory + type.' };
 
-  await upsertQuestNpc({ ...npc, id: npc.id.trim() });
+    await upsertQuestNpc({ ...npc, id: npc.id.trim() });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Failed to save the NPC.' };
+  }
   revalidatePath('/quest-npcs');
   return { ok: true };
 }
 
-export async function deleteQuestNpcAction(id: string): Promise<void> {
-  await requireUser();
-  await deleteQuestNpc(id);
+export async function deleteQuestNpcAction(id: string): Promise<ActionResult> {
+  try {
+    await requireUser();
+    await deleteQuestNpc(id);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Failed to delete the NPC.' };
+  }
   revalidatePath('/quest-npcs');
+  return { ok: true };
 }
 
 /** Pull a signed skin (value + signature) from a Minecraft player's profile. */
